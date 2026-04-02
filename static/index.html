@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tube Grab + Clip</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ["ui-sans-serif", "system-ui", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"],
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    @keyframes meta-pop {
+      from {
+        opacity: 0;
+        transform: translate(-50%, 0.75rem) scale(0.96);
+      }
+      to {
+        opacity: 1;
+        transform: translate(-50%, 0) scale(1);
+      }
+    }
+    #metaBar.is-open {
+      animation: meta-pop 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    @keyframes toast-in {
+      from {
+        opacity: 0;
+        transform: translate(-50%, 1rem) scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: translate(-50%, 0) scale(1);
+      }
+    }
+    #toast.is-visible #toastPanel {
+      animation: toast-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+  </style>
+</head>
+<body class="h-full min-h-screen bg-zinc-950 text-zinc-100 antialiased">
+  <div class="mx-auto flex min-h-screen max-w-lg flex-col px-4 py-10 sm:py-14">
+    <header class="mb-8 text-center">
+      <div class="flex items-center justify-center gap-3">
+        <h1 class="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Tube Grab</h1>
+        <span
+          id="healthDot"
+          class="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-zinc-600"
+          title="Checking tools…"
+          aria-label="Server health"
+        ></span>
+      </div>
+      <p class="mt-2 text-sm text-zinc-400">YouTube audio or video, then fast MP3 clips (local only)</p>
+    </header>
+
+    <main class="flex flex-1 flex-col gap-6">
+      <label class="block">
+        <span class="mb-2 block text-center text-xs font-medium uppercase tracking-wider text-zinc-500">YouTube URL</span>
+        <input
+          id="url"
+          type="url"
+          inputmode="url"
+          autocomplete="off"
+          placeholder="https://www.youtube.com/watch?v=… or https://youtu.be/…"
+          class="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-4 text-center text-base text-white placeholder:text-zinc-600 focus:border-emerald-600/70 focus:outline-none focus:ring-2 focus:ring-emerald-600/30"
+        />
+      </label>
+
+      <div class="flex flex-wrap items-center justify-center gap-2">
+        <button
+          type="button"
+          id="btnPaste"
+          class="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-medium text-zinc-200 hover:bg-zinc-800"
+        >
+          Paste from clipboard
+        </button>
+        <button
+          type="button"
+          id="btnNewGrab"
+          class="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-medium text-zinc-200 hover:bg-zinc-800"
+        >
+          New grab
+        </button>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-center gap-4 text-sm">
+        <label class="inline-flex cursor-pointer items-center gap-2 text-zinc-300">
+          <input type="radio" name="fmt" value="mp3" checked class="accent-emerald-500" />
+          MP3 (audio)
+        </label>
+        <label class="inline-flex cursor-pointer items-center gap-2 text-zinc-300">
+          <input type="radio" name="fmt" value="mp4" class="accent-emerald-500" />
+          MP4 (video)
+        </label>
+      </div>
+
+      <section class="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4" aria-labelledby="saveFolderHeading">
+        <h3 id="saveFolderHeading" class="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+          Save folder (Dropbox sync)
+        </h3>
+        <p class="mb-3 text-[11px] leading-relaxed text-zinc-500">
+          <strong class="font-medium text-zinc-400">Choose folder…</strong> or <strong class="font-medium text-zinc-400">Save path</strong> locks a folder. While it shows <span class="text-emerald-500/90">Locked in</span>, full downloads and clips save <strong class="font-medium text-zinc-400">only there</strong> — no browser “Save as” prompt. Without a folder, the normal browser download runs. Same filename overwrites. Settings:
+          <code class="rounded bg-zinc-800 px-1 text-zinc-400">download_settings.json</code>.
+        </p>
+        <input
+          id="downloadFolderPath"
+          type="text"
+          spellcheck="false"
+          autocomplete="off"
+          placeholder="/Users/you/Library/CloudStorage/Dropbox/Music or /Users/you/Dropbox/…"
+          class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 font-mono text-xs text-white placeholder:text-zinc-600 focus:border-emerald-600/60 focus:outline-none focus:ring-1 focus:ring-emerald-600/30"
+        />
+        <div class="mt-2 flex flex-wrap gap-2">
+          <button
+            type="button"
+            id="btnPickFolder"
+            class="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-600"
+          >
+            Choose folder…
+          </button>
+          <button
+            type="button"
+            id="btnSaveFolder"
+            class="rounded-lg border border-emerald-700/60 px-3 py-2 text-xs font-medium text-emerald-200 hover:bg-emerald-950/50"
+          >
+            Save path
+          </button>
+          <button
+            type="button"
+            id="btnClearFolder"
+            class="rounded-lg border border-zinc-600 px-3 py-2 text-xs font-medium text-zinc-300 hover:bg-zinc-800"
+          >
+            Clear
+          </button>
+        </div>
+        <p id="downloadFolderStatus" class="mt-2 min-h-[1.25rem] text-xs text-zinc-500"></p>
+      </section>
+
+      <section
+        id="playlistPanel"
+        class="hidden rounded-2xl border border-violet-500/20 bg-zinc-900/60 p-4 shadow-[0_0_40px_-15px_rgba(139,92,246,0.35)]"
+      >
+        <div class="mb-3 flex items-start justify-between gap-2">
+          <div>
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-violet-300/90">Playlist</h3>
+            <p id="playlistTitle" class="mt-1 text-sm font-medium text-zinc-200"></p>
+            <p id="playlistHint" class="mt-0.5 text-[11px] text-zinc-500"></p>
+          </div>
+        </div>
+        <div class="mb-3 flex flex-col gap-2 text-sm">
+          <label class="flex cursor-pointer items-center gap-2 text-zinc-300">
+            <input type="radio" name="plScope" value="video" checked class="accent-violet-500" />
+            This video only
+          </label>
+          <label class="flex cursor-pointer items-center gap-2 text-zinc-300">
+            <input type="radio" name="plScope" value="items" class="accent-violet-500" />
+            Selected tracks
+          </label>
+          <label class="flex cursor-pointer items-center gap-2 text-zinc-300">
+            <input type="radio" name="plScope" value="all" class="accent-violet-500" />
+            Entire playlist
+          </label>
+        </div>
+        <div id="playlistListWrap" class="mb-2 hidden max-h-48 overflow-y-auto rounded-xl border border-zinc-800 bg-zinc-950/80 p-2">
+          <div class="mb-2 flex gap-2">
+            <button type="button" id="plSelectAll" class="text-[11px] text-violet-400 hover:underline">Select all</button>
+            <button type="button" id="plSelectNone" class="text-[11px] text-zinc-500 hover:underline">None</button>
+          </div>
+          <div id="playlistList" class="space-y-1.5"></div>
+        </div>
+      </section>
+
+      <button
+        type="button"
+        id="btnPrepare"
+        class="w-full rounded-xl bg-emerald-600 py-4 text-center text-base font-semibold text-white shadow-lg shadow-emerald-900/40 transition hover:bg-emerald-500 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Download Full
+      </button>
+
+      <div id="prepareProgress" class="hidden">
+        <div class="mb-2 flex justify-between text-xs text-zinc-500">
+          <span>Preparing file</span>
+          <span id="prepareHint">yt-dlp + ffmpeg</span>
+        </div>
+        <div class="h-2 overflow-hidden rounded-full bg-zinc-800">
+          <div id="prepareBar" class="h-full w-1/3 animate-[pulse_1.5s_ease-in-out_infinite] rounded-full bg-emerald-500/80"></div>
+        </div>
+      </div>
+
+      <section id="resultCard" class="hidden space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/80 p-4 shadow-xl">
+        <div class="flex gap-4">
+          <img id="thumb" alt="" class="hidden h-20 w-28 shrink-0 rounded-lg object-cover ring-1 ring-zinc-700" />
+          <div class="min-w-0 flex-1">
+            <h2 id="title" class="text-sm font-medium leading-snug text-white"></h2>
+            <p id="duration" class="mt-1 text-xs text-zinc-500"></p>
+          </div>
+        </div>
+        <div id="multiDownloads" class="hidden space-y-2"></div>
+        <button
+          type="button"
+          id="btnSaveAllParts"
+          class="mb-2 hidden w-full rounded-lg border border-emerald-600/50 bg-emerald-950/40 py-2.5 text-sm font-medium text-emerald-200 hover:bg-emerald-950/70"
+        >
+          Save all tracks (folder)
+        </button>
+        <button
+          type="button"
+          id="btnDownloadFull"
+          class="w-full rounded-lg border border-zinc-700 bg-zinc-800 py-3 text-sm font-medium text-white hover:bg-zinc-700/90"
+        >
+          Download Full <span id="fullFmtLabel">MP3</span>
+        </button>
+
+        <div id="clipSection" class="hidden space-y-3 border-t border-zinc-800 pt-4">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-500">Create clip</h3>
+          <p id="clipVideoLength" class="hidden text-xs text-zinc-500"></p>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <label class="block text-xs text-zinc-400">
+              Start (MM:SS or HH:MM:SS)
+              <input id="clipStart" type="text" placeholder="0:00" class="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white" />
+            </label>
+            <label class="block text-xs text-zinc-400">
+              End (optional)
+              <input id="clipEnd" type="text" placeholder="1:30" class="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white" />
+            </label>
+            <label class="block text-xs text-zinc-400 sm:col-span-2">
+              Duration (seconds, optional if End set)
+              <input id="clipDur" type="number" min="0.1" step="0.1" placeholder="30" class="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white" />
+            </label>
+            <label class="block text-xs text-zinc-400 sm:col-span-2">
+              Clip name (optional)
+              <input id="clipName" type="text" placeholder="my_clip" class="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white" />
+            </label>
+          </div>
+          <p id="clipSpanHint" class="min-h-[1.25rem] text-xs text-zinc-600"></p>
+          <button
+            type="button"
+            id="btnClip"
+            class="w-full rounded-lg bg-emerald-700 py-3 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-50"
+          >
+            Generate &amp; Download Clip
+          </button>
+          <div id="clipProgress" class="hidden text-center text-xs text-zinc-500">
+            <span class="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-500 align-middle"></span>
+            Trimming with ffmpeg…
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <footer class="mt-10 text-center text-[11px] text-zinc-600">
+      Personal use · files stay in ./temp until a new grab or session expires · <kbd class="text-zinc-500">Enter</kbd> prepare ·
+      <kbd class="text-zinc-500">Esc</kbd> new grab
+    </footer>
+  </div>
+
+  <!-- Metadata: floating overlay (not inline / “dropdown”) -->
+  <div
+    id="metaBackdrop"
+    class="fixed inset-0 z-[90] hidden bg-zinc-950/75 backdrop-blur-[3px] transition-opacity duration-300 opacity-0"
+    aria-hidden="true"
+  ></div>
+  <div
+    id="metaBar"
+    class="fixed left-1/2 top-[max(5rem,12vh)] z-[95] hidden w-[min(calc(100vw-1.5rem),26rem)] -translate-x-1/2 rounded-2xl border border-emerald-500/20 bg-zinc-900/95 px-5 py-4 text-center shadow-[0_0_0_1px_rgba(52,211,153,0.06),0_25px_50px_-12px_rgba(0,0,0,0.85)] backdrop-blur-xl"
+    role="status"
+  >
+    <div id="metaStatus" class="flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
+      <span
+        id="metaSpinner"
+        class="hidden h-3 w-3 shrink-0 animate-pulse rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.6)]"
+      ></span>
+      <span id="metaText" class="text-sm leading-snug text-zinc-200"></span>
+    </div>
+  </div>
+
+  <div id="toast" class="pointer-events-none fixed bottom-8 left-1/2 z-[110] hidden -translate-x-1/2 px-4">
+    <div
+      id="toastPanel"
+      class="flex max-w-sm items-center gap-3 rounded-2xl border px-5 py-3.5 shadow-2xl backdrop-blur-md"
+    >
+      <span id="toastIcon" class="hidden shrink-0 text-lg leading-none" aria-hidden="true"></span>
+      <span id="toastMsg" class="text-sm font-medium leading-snug whitespace-pre-wrap"></span>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const LS_FORMAT = "tubegrab:format";
+      const $ = (id) => document.getElementById(id);
+      const urlEl = $("url");
+      const btnPrepare = $("btnPrepare");
+      const btnPaste = $("btnPaste");
+      const btnNewGrab = $("btnNewGrab");
+      const btnDownloadFull = $("btnDownloadFull");
+      const btnClip = $("btnClip");
+      const metaBar = $("metaBar");
+      const metaBackdrop = $("metaBackdrop");
+      const metaText = $("metaText");
+      const metaSpinner = $("metaSpinner");
+      const prepareProgress = $("prepareProgress");
+      const resultCard = $("resultCard");
+      const clipSection = $("clipSection");
+      const toast = $("toast");
+      const healthDot = $("healthDot");
+
+      let sessionId = null;
+      let durationSec = 0;
+      let mediaFormat = "mp3";
+      let metaTimer = null;
+      let metaAutoHideTimer = null;
+      /** @type {string|null} */
+      let saveFolderActive = null;
+      /** @type {any|null} */
+      let playlistData = null;
+      let lastFileCount = 1;
+      let lastClipsEnabled = false;
+      const playlistPanel = $("playlistPanel");
+      const playlistList = $("playlistList");
+      const playlistListWrap = $("playlistListWrap");
+      const multiDownloads = $("multiDownloads");
+      const btnSaveAllParts = $("btnSaveAllParts");
+
+      function escapeHtml(s) {
+        const div = document.createElement("div");
+        div.textContent = s;
+        return div.innerHTML;
+      }
+
+      async function loadDownloadFolderSettings() {
+        const st = $("downloadFolderStatus");
+        const inp = $("downloadFolderPath");
+        try {
+          const r = await fetch("/api/settings/download-folder");
+          const d = await r.json();
+          inp.value = d.download_dir || "";
+          saveFolderActive = d.folder_ok && d.resolved_path ? d.resolved_path : null;
+          if (!d.download_dir) {
+            st.textContent = "No save folder — browser handles downloads.";
+            st.className = "mt-2 min-h-[1.25rem] text-xs text-zinc-500";
+            btnSaveAllParts.classList.add("hidden");
+          } else if (d.folder_ok) {
+            st.textContent = "✓ Save folder is active — downloads go there automatically.";
+            st.className = "mt-2 min-h-[1.25rem] text-xs text-emerald-500/90";
+            if (!resultCard.classList.contains("hidden") && lastFileCount > 1 && saveFolderActive) {
+              btnSaveAllParts.classList.remove("hidden");
+            }
+          } else {
+            st.textContent = "Saved path missing or not writable — update or clear.";
+            st.className = "mt-2 min-h-[1.25rem] text-xs text-rose-400/90";
+            btnSaveAllParts.classList.add("hidden");
+          }
+        } catch (_) {
+          st.textContent = "Could not load folder settings.";
+          st.className = "mt-2 min-h-[1.25rem] text-xs text-rose-400/90";
+        }
+      }
+
+      function setMetaOpen(open, autoHideMs) {
+        clearTimeout(metaAutoHideTimer);
+        if (!open) {
+          metaBackdrop.classList.remove("opacity-100");
+          metaBackdrop.classList.add("opacity-0");
+          metaBar.classList.remove("is-open");
+          metaAutoHideTimer = setTimeout(() => {
+            metaBar.classList.add("hidden");
+            metaBackdrop.classList.add("hidden");
+          }, 280);
+          return;
+        }
+        metaBackdrop.classList.remove("hidden");
+        metaBar.classList.remove("hidden");
+        metaBar.classList.remove("is-open");
+        void metaBar.offsetWidth;
+        metaBar.classList.add("is-open");
+        requestAnimationFrame(() => {
+          metaBackdrop.classList.remove("opacity-0");
+          metaBackdrop.classList.add("opacity-100");
+        });
+        if (autoHideMs && autoHideMs > 0) {
+          metaAutoHideTimer = setTimeout(() => setMetaOpen(false), autoHideMs);
+        }
+      }
+
+      function showMetaLoading(msg) {
+        clearTimeout(metaAutoHideTimer);
+        metaSpinner.classList.remove("hidden");
+        metaText.textContent = msg;
+        setMetaOpen(true);
+      }
+
+      function showMetaResult(msg, autoHideMs) {
+        metaSpinner.classList.add("hidden");
+        metaText.textContent = msg;
+        setMetaOpen(true, autoHideMs);
+      }
+
+      function celebrateConfetti() {
+        const canvas = document.createElement("canvas");
+        canvas.setAttribute("aria-hidden", "true");
+        canvas.className = "pointer-events-none fixed inset-0 z-[105]";
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        canvas.style.width = "100%";
+        canvas.style.height = "100%";
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        ctx.scale(dpr, dpr);
+        const colors = ["#34d399", "#fbbf24", "#f472b6", "#38bdf8", "#a78bfa", "#e4e4e7"];
+        const pieces = [];
+        for (let i = 0; i < 140; i++) {
+          pieces.push({
+            x: Math.random() * w,
+            y: -30 - Math.random() * h * 0.4,
+            w: 3 + Math.random() * 7,
+            h: 5 + Math.random() * 9,
+            vx: -4 + Math.random() * 8,
+            vy: 1.5 + Math.random() * 4,
+            rot: Math.random() * 6.28,
+            vr: -0.25 + Math.random() * 0.5,
+            c: colors[(Math.random() * colors.length) | 0],
+          });
+        }
+        let frames = 0;
+        const maxF = 100;
+        document.body.appendChild(canvas);
+        function tick() {
+          frames++;
+          ctx.clearRect(0, 0, w, h);
+          let any = false;
+          const fade = Math.max(0, 1 - Math.max(0, frames - 65) / 35);
+          for (const p of pieces) {
+            p.vy += 0.07;
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vx *= 0.99;
+            p.rot += p.vr;
+            if (p.y < h + 50) any = true;
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.rot);
+            ctx.fillStyle = p.c;
+            ctx.globalAlpha = 0.9 * fade;
+            ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+            ctx.restore();
+          }
+          ctx.globalAlpha = 1;
+          if (frames < maxF && any) requestAnimationFrame(tick);
+          else canvas.remove();
+        }
+        requestAnimationFrame(tick);
+      }
+
+      function celebrateSave(kind) {
+        celebrateConfetti();
+        const msg =
+          kind === "clip" ? "Clip saved!" : kind === "browser" ? "You’re all set!" : "Saved!";
+        showToast(msg, { variant: "success", duration: 3200 });
+      }
+
+      function looksLikeYt(t) {
+        const s = (t || "").trim();
+        if (!/^https?:\/\//i.test(s)) return false;
+        return (
+          /youtube\.com\/(watch\?|shorts\/|playlist\?)/i.test(s) || /youtu\.be\//i.test(s)
+        );
+      }
+
+      /** True if we should ask the server for playlist metadata (watch + list=, playlist page, youtu.be + list). */
+      function shouldFetchPlaylistInfo(url) {
+        const s = (url || "").trim();
+        if (!s) return false;
+        if (looksLikeYt(s)) return true;
+        if (/youtube\.com\//i.test(s) && /[?&]list=[^&]+/i.test(s)) return true;
+        return false;
+      }
+
+      function showToast(msg, opts) {
+        const variant = (opts && opts.variant) || "neutral";
+        const duration = (opts && opts.duration) != null ? opts.duration : 4500;
+        const icon = $("toastIcon");
+        const panel = $("toastPanel");
+        $("toastMsg").textContent = msg;
+        if (variant === "success") {
+          icon.textContent = "✓";
+          icon.classList.remove("hidden");
+          panel.className =
+            "flex max-w-sm items-center gap-3 rounded-2xl border border-emerald-400/35 bg-emerald-950/92 px-5 py-3.5 text-emerald-50 shadow-[0_0_48px_-8px_rgba(52,211,153,0.45)] backdrop-blur-md";
+        } else {
+          icon.classList.add("hidden");
+          panel.className =
+            "flex max-w-sm items-center gap-3 rounded-2xl border border-zinc-600/70 bg-zinc-900/95 px-5 py-3.5 text-zinc-100 shadow-2xl backdrop-blur-md";
+        }
+        toast.classList.remove("hidden");
+        toast.classList.add("is-visible");
+        clearTimeout(showToast._t);
+        showToast._t = setTimeout(() => {
+          toast.classList.add("hidden");
+          toast.classList.remove("is-visible");
+        }, duration);
+      }
+
+      function formatDuration(sec) {
+        if (sec == null || !isFinite(sec) || sec < 0) return "—";
+        const s = Math.floor(sec);
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const r = s % 60;
+        if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
+        return `${m}:${String(r).padStart(2, "0")}`;
+      }
+
+      function parseTs(s) {
+        const t = (s || "").trim();
+        if (!t) return null;
+        const p = t.split(":");
+        try {
+          if (p.length === 1) {
+            const v = parseFloat(p[0]);
+            return isNaN(v) ? null : v;
+          }
+          if (p.length === 2) {
+            const a = parseInt(p[0], 10);
+            const b = parseFloat(p[1]);
+            if (isNaN(a) || isNaN(b)) return null;
+            return a * 60 + b;
+          }
+          if (p.length === 3) {
+            const a = parseInt(p[0], 10);
+            const b = parseInt(p[1], 10);
+            const c = parseFloat(p[2]);
+            if (isNaN(a) || isNaN(b) || isNaN(c)) return null;
+            return a * 3600 + b * 60 + c;
+          }
+        } catch (_) {}
+        return null;
+      }
+
+      function updateClipHint() {
+        const hint = $("clipSpanHint");
+        const lenEl = $("clipVideoLength");
+        if (durationSec > 0) {
+          lenEl.textContent = "Video length: " + formatDuration(durationSec);
+          lenEl.classList.remove("hidden");
+        } else {
+          lenEl.classList.add("hidden");
+        }
+        if (clipSection.classList.contains("hidden")) return;
+
+        const start = parseTs($("clipStart").value);
+        const end = parseTs($("clipEnd").value);
+        const durIn = $("clipDur").value.trim();
+        const durNum = durIn === "" ? null : parseFloat(durIn);
+
+        if (start == null) {
+          hint.textContent = "";
+          hint.className = "min-h-[1.25rem] text-xs text-zinc-600";
+          return;
+        }
+        let span = null;
+        if (end != null) span = end - start;
+        else if (durNum != null && durNum > 0) span = durNum;
+        if (span == null) {
+          hint.textContent = "Set end time or duration to see span.";
+          hint.className = "min-h-[1.25rem] text-xs text-zinc-500";
+          return;
+        }
+        if (span <= 0) {
+          hint.textContent = "End must be after start.";
+          hint.className = "min-h-[1.25rem] text-xs text-rose-400";
+          return;
+        }
+        let msg = "Selected span: " + formatDuration(span);
+        if (durationSec > 0) {
+          const endT = start + span;
+          if (endT > durationSec + 0.3) {
+            hint.textContent = "Range extends past video length.";
+            hint.className = "min-h-[1.25rem] text-xs text-rose-400";
+            return;
+          }
+          msg += " (within " + formatDuration(durationSec) + ")";
+        }
+        hint.textContent = msg;
+        hint.className = "min-h-[1.25rem] text-xs text-emerald-500/90";
+      }
+
+      function selectedFormat() {
+        const r = document.querySelector('input[name="fmt"]:checked');
+        return r ? r.value : "mp3";
+      }
+
+      function saveFormat() {
+        localStorage.setItem(LS_FORMAT, selectedFormat());
+      }
+
+      function loadFormat() {
+        const v = localStorage.getItem(LS_FORMAT);
+        if (v === "mp3" || v === "mp4") {
+          const el = document.querySelector('input[name="fmt"][value="' + v + '"]');
+          if (el) el.checked = true;
+        }
+      }
+
+      function triggerGetDownload(path) {
+        const a = document.createElement("a");
+        a.href = path;
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+
+      function syncPlaylistListVisibility() {
+        const scope = document.querySelector('input[name="plScope"]:checked');
+        const v = scope ? scope.value : "video";
+        if (v === "items" && playlistData && playlistData.is_playlist) {
+          playlistListWrap.classList.remove("hidden");
+        } else {
+          playlistListWrap.classList.add("hidden");
+        }
+      }
+
+      function renderPlaylistPanel(d) {
+        $("playlistTitle").textContent = d.playlist_title || "Playlist";
+        const n = (d.entries && d.entries.length) || 0;
+        const cur = d.current_index;
+        const pc = d.playlist_count;
+        let hint;
+        if (d.entries_truncated && pc != null && pc > n) {
+          hint =
+            pc +
+            " videos in this playlist · showing first " +
+            n +
+            " below. Entire playlist still downloads all tracks.";
+        } else if (cur != null) {
+          hint = n + " videos · current link is #" + cur;
+        } else {
+          hint = (pc != null ? pc : n) + " videos";
+        }
+        $("playlistHint").textContent = hint;
+        playlistList.innerHTML = "";
+        (d.entries || []).forEach((e) => {
+          const row = document.createElement("label");
+          row.className =
+            "flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800/80";
+          const cb = document.createElement("input");
+          cb.type = "checkbox";
+          cb.className = "mt-0.5 accent-violet-500";
+          cb.dataset.index = String(e.index);
+          if (cur != null && e.index === cur) cb.checked = true;
+          else if (cur == null && e.index === 1) cb.checked = true;
+          const span = document.createElement("span");
+          span.innerHTML =
+            "<span class='font-mono text-zinc-500'>" +
+            e.index +
+            ".</span> " +
+            escapeHtml(e.title || "") +
+            " <span class='text-zinc-600'>" +
+            formatDuration(e.duration_sec) +
+            "</span>";
+          row.appendChild(cb);
+          row.appendChild(span);
+          playlistList.appendChild(row);
+        });
+        syncPlaylistListVisibility();
+      }
+
+      async function fetchPlaylistInfo() {
+        const url = urlEl.value.trim();
+        if (!url || !shouldFetchPlaylistInfo(url)) {
+          playlistData = null;
+          playlistPanel.classList.add("hidden");
+          return;
+        }
+        try {
+          const res = await fetch("/api/playlist-info", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url }),
+          });
+          const d = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            playlistData = null;
+            playlistPanel.classList.add("hidden");
+            return;
+          }
+          playlistData = d;
+          if (d.is_playlist && d.entries && d.entries.length > 0) {
+            renderPlaylistPanel(d);
+            playlistPanel.classList.remove("hidden");
+          } else {
+            playlistPanel.classList.add("hidden");
+          }
+        } catch (_) {
+          playlistData = null;
+          playlistPanel.classList.add("hidden");
+        }
+      }
+
+      function getPlaylistPreparePayload() {
+        if (!playlistData || !playlistData.is_playlist) {
+          return { playlist_mode: "single", playlist_items: null };
+        }
+        const scopeEl = document.querySelector('input[name="plScope"]:checked');
+        const scope = scopeEl ? scopeEl.value : "video";
+        if (scope === "video") return { playlist_mode: "single", playlist_items: null };
+        if (scope === "all") return { playlist_mode: "all", playlist_items: null };
+        const boxes = playlistList.querySelectorAll("input[type=checkbox]");
+        const indices = [];
+        boxes.forEach((cb) => {
+          if (cb.checked) indices.push(parseInt(cb.dataset.index, 10));
+        });
+        indices.sort((a, b) => a - b);
+        if (indices.length === 0) {
+          throw new Error('Select at least one track, or choose "This video only".');
+        }
+        return { playlist_mode: "items", playlist_items: indices.join(",") };
+      }
+
+      function renderResultDownloads(data) {
+        lastFileCount = data.file_count || 1;
+        lastClipsEnabled = !!data.clips_enabled;
+        multiDownloads.innerHTML = "";
+        if (lastFileCount <= 1) {
+          multiDownloads.classList.add("hidden");
+          btnSaveAllParts.classList.add("hidden");
+          btnDownloadFull.classList.remove("hidden");
+          return;
+        }
+        btnDownloadFull.classList.add("hidden");
+        multiDownloads.classList.remove("hidden");
+        (data.files || []).forEach((f, i) => {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className =
+            "w-full rounded-lg border border-zinc-700 bg-zinc-800 py-2.5 px-3 text-left text-sm font-medium text-white hover:bg-zinc-700/90";
+          b.textContent = "↓ " + (f.title || "Track " + (i + 1));
+          b.addEventListener("click", () => downloadSessionPart(i, { celebrateBrowser: true }));
+          multiDownloads.appendChild(b);
+        });
+        if (saveFolderActive) {
+          btnSaveAllParts.classList.remove("hidden");
+        } else {
+          btnSaveAllParts.classList.add("hidden");
+        }
+      }
+
+      async function downloadSessionPart(partIndex, opts) {
+        if (!sessionId) return;
+        const celebrateBrowser = opts && opts.celebrateBrowser;
+        if (saveFolderActive) {
+          try {
+            const r = await fetch(
+              "/api/session/" + sessionId + "/part/" + partIndex + "?delivery=copy_only"
+            );
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok)
+              throw new Error(typeof d.detail === "string" ? d.detail : "Save failed");
+            if (celebrateBrowser) celebrateSave("full");
+          } catch (e) {
+            showToast(e.message || "Could not save file");
+          }
+        } else {
+          triggerGetDownload("/api/session/" + sessionId + "/part/" + partIndex);
+          if (celebrateBrowser) setTimeout(() => celebrateSave("browser"), 650);
+        }
+      }
+
+      async function saveAllSessionParts() {
+        if (!sessionId || lastFileCount <= 1) return;
+        if (!saveFolderActive) return;
+        btnSaveAllParts.disabled = true;
+        try {
+          for (let i = 0; i < lastFileCount; i++) {
+            const r = await fetch(
+              "/api/session/" + sessionId + "/part/" + i + "?delivery=copy_only"
+            );
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok)
+              throw new Error(
+                typeof d.detail === "string" ? d.detail : "Save failed on track " + (i + 1)
+              );
+          }
+          celebrateSave("full");
+        } catch (e) {
+          showToast(e.message || "Could not save all tracks");
+        } finally {
+          btnSaveAllParts.disabled = false;
+        }
+      }
+
+      async function refreshHealth() {
+        try {
+          const r = await fetch("/api/health");
+          const d = await r.json();
+          const parts = ["yt-dlp: " + (d.ytdlp ? "ok" : "no"), "ffmpeg: " + (d.ffmpeg ? "ok" : "no")];
+          if (d.ytdlp_via) parts.push("via " + d.ytdlp_via);
+          healthDot.title = parts.join(" · ");
+          if (d.ok) {
+            healthDot.className =
+              "inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500 shadow shadow-emerald-500/40";
+          } else if (d.ytdlp || d.ffmpeg) {
+            healthDot.className = "inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-amber-500";
+          } else {
+            healthDot.className = "inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-rose-500";
+          }
+        } catch (_) {
+          healthDot.title = "Could not reach /api/health";
+          healthDot.className = "inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-zinc-600";
+        }
+      }
+
+      async function newGrab() {
+        if (sessionId) {
+          try {
+            await fetch("/api/session/" + sessionId, { method: "DELETE" });
+          } catch (_) {}
+        }
+        sessionId = null;
+        durationSec = 0;
+        urlEl.value = "";
+        $("clipStart").value = "";
+        $("clipEnd").value = "";
+        $("clipDur").value = "";
+        $("clipName").value = "";
+        resultCard.classList.add("hidden");
+        clipSection.classList.add("hidden");
+        prepareProgress.classList.add("hidden");
+        playlistData = null;
+        playlistPanel.classList.add("hidden");
+        playlistList.innerHTML = "";
+        const vScope = document.querySelector('input[name="plScope"][value="video"]');
+        if (vScope) vScope.checked = true;
+        lastFileCount = 1;
+        lastClipsEnabled = false;
+        multiDownloads.classList.add("hidden");
+        multiDownloads.innerHTML = "";
+        btnSaveAllParts.classList.add("hidden");
+        btnDownloadFull.classList.remove("hidden");
+        setMetaOpen(false);
+        updateClipHint();
+        urlEl.focus();
+      }
+
+      async function pasteFromClipboard() {
+        btnPaste.classList.add("ring-2", "ring-emerald-400/50", "ring-offset-2", "ring-offset-zinc-950");
+        setTimeout(() => btnPaste.classList.remove("ring-2", "ring-emerald-400/50", "ring-offset-2", "ring-offset-zinc-950"), 650);
+        try {
+          const t = await navigator.clipboard.readText();
+          if (looksLikeYt(t)) {
+            urlEl.value = t.trim();
+            showMetaLoading("Pasted — fetching video info…");
+            const ok = await fetchMetadata();
+            fetchPlaylistInfo();
+            if (ok) showToast("Link added", { variant: "success", duration: 2200 });
+          } else {
+            showToast("That clipboard text isn’t a YouTube link");
+          }
+        } catch (_) {
+          showToast("Clipboard blocked — paste with ⌘V in the field");
+        }
+      }
+
+      async function fetchMetadata() {
+        const url = urlEl.value.trim();
+        if (!url || !/^https?:\/\//i.test(url)) {
+          setMetaOpen(false);
+          return false;
+        }
+        const alreadyOpen = !metaBar.classList.contains("hidden");
+        if (!alreadyOpen) showMetaLoading("Fetching video info…");
+        else {
+          metaSpinner.classList.remove("hidden");
+          metaText.textContent = "Fetching video info…";
+        }
+        try {
+          const res = await fetch("/api/metadata", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail) || res.statusText);
+          durationSec = Number(data.duration_sec) || 0;
+          updateClipHint();
+          showMetaResult((data.title || "Video") + " · " + formatDuration(data.duration_sec), 5200);
+          return true;
+        } catch (e) {
+          showMetaResult(e.message || "Could not load metadata", 6500);
+          return false;
+        }
+      }
+
+      document.querySelectorAll('input[name="fmt"]').forEach((el) => el.addEventListener("change", saveFormat));
+
+      document.querySelectorAll('input[name="plScope"]').forEach((el) =>
+        el.addEventListener("change", syncPlaylistListVisibility)
+      );
+      $("plSelectAll").addEventListener("click", () => {
+        playlistList.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+          cb.checked = true;
+        });
+      });
+      $("plSelectNone").addEventListener("click", () => {
+        playlistList.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+          cb.checked = false;
+        });
+      });
+
+      function scheduleUrlSideEffects() {
+        clearTimeout(metaTimer);
+        metaTimer = setTimeout(() => {
+          fetchMetadata();
+          fetchPlaylistInfo();
+        }, 550);
+      }
+
+      urlEl.addEventListener("input", scheduleUrlSideEffects);
+      urlEl.addEventListener("paste", () => {
+        clearTimeout(metaTimer);
+        metaTimer = setTimeout(() => {
+          fetchMetadata();
+          fetchPlaylistInfo();
+        }, 100);
+      });
+
+      ["clipStart", "clipEnd", "clipDur"].forEach((id) => {
+        $(id).addEventListener("input", updateClipHint);
+        $(id).addEventListener("change", updateClipHint);
+      });
+
+      btnPaste.addEventListener("click", pasteFromClipboard);
+      $("btnPickFolder").addEventListener("click", async () => {
+        const btn = $("btnPickFolder");
+        btn.disabled = true;
+        try {
+          const r = await fetch("/api/settings/pick-folder", { method: "POST" });
+          const d = await r.json().catch(() => ({}));
+          if (!r.ok)
+            throw new Error(typeof d.detail === "string" ? d.detail : "Folder picker failed or cancelled");
+          $("downloadFolderPath").value = d.download_dir || "";
+          saveFolderActive = d.folder_ok && d.resolved_path ? d.resolved_path : null;
+          await loadDownloadFolderSettings();
+          showToast("Save folder locked in");
+        } catch (e) {
+          const msg = e.message || "Picker failed";
+          if (/cancelled|No folder selected/i.test(msg)) showToast("Selection cancelled");
+          else showToast(msg);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+      $("btnSaveFolder").addEventListener("click", async () => {
+        const path = $("downloadFolderPath").value.trim();
+        try {
+          const r = await fetch("/api/settings/download-folder", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ download_dir: path }),
+          });
+          const d = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(typeof d.detail === "string" ? d.detail : "Save failed");
+          await loadDownloadFolderSettings();
+          showToast(path ? "Save folder locked in" : "Save folder cleared");
+        } catch (e) {
+          showToast(e.message || "Could not save folder");
+        }
+      });
+      $("btnClearFolder").addEventListener("click", async () => {
+        $("downloadFolderPath").value = "";
+        try {
+          const r = await fetch("/api/settings/download-folder", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ download_dir: "" }),
+          });
+          if (!r.ok) {
+            const d = await r.json().catch(() => ({}));
+            throw new Error(typeof d.detail === "string" ? d.detail : "Clear failed");
+          }
+          await loadDownloadFolderSettings();
+          showToast("Save folder cleared");
+        } catch (e) {
+          showToast(e.message || "Could not clear");
+        }
+      });
+      btnNewGrab.addEventListener("click", () => {
+        newGrab();
+        showToast("Ready for a new URL");
+      });
+
+      btnPrepare.addEventListener("click", async () => {
+        const url = urlEl.value.trim();
+        if (!url) {
+          showToast("Paste a YouTube URL first");
+          return;
+        }
+        let plPayload;
+        try {
+          plPayload = getPlaylistPreparePayload();
+        } catch (err) {
+          showToast(err.message || "Check playlist selection");
+          return;
+        }
+        mediaFormat = selectedFormat();
+        btnPrepare.disabled = true;
+        prepareProgress.classList.remove("hidden");
+        const prepareHint = $("prepareHint");
+        const defaultHint = "yt-dlp + ffmpeg";
+        const multiPl =
+          plPayload.playlist_mode === "all" ||
+          (plPayload.playlist_mode === "items" && plPayload.playlist_items);
+        if (!multiPl) {
+          prepareHint.textContent = defaultHint;
+        } else if (plPayload.playlist_mode === "all" && playlistData && playlistData.playlist_count) {
+          const pc = playlistData.playlist_count;
+          let msg =
+            "Full playlist: ~" +
+            pc +
+            " tracks — often 30–90+ min for big lists. Keep this tab open. Unavailable entries are skipped.";
+          if (playlistData.entries_truncated) {
+            msg += " (Track list above is capped; download is not.)";
+          }
+          prepareHint.textContent = msg;
+        } else {
+          prepareHint.textContent =
+            "Playlist download — can take a while. Leave this tab open. Unavailable videos are skipped.";
+        }
+        resultCard.classList.add("hidden");
+        clipSection.classList.add("hidden");
+
+        try {
+          const res = await fetch("/api/prepare", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              url,
+              format: mediaFormat,
+              previous_session_id: sessionId,
+              playlist_mode: plPayload.playlist_mode,
+              playlist_items: plPayload.playlist_items,
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok)
+            throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail) || res.statusText);
+
+          sessionId = data.session_id;
+          durationSec = Number(data.duration_sec) || durationSec;
+          $("title").textContent = data.title || "Downloaded";
+          const fc = data.file_count || 1;
+          $("duration").textContent =
+            fc > 1 ? fc + " tracks prepared" : "Duration: " + formatDuration(data.duration_sec);
+          const thumb = $("thumb");
+          if (data.thumbnail) {
+            thumb.src = data.thumbnail;
+            thumb.classList.remove("hidden");
+          } else {
+            thumb.classList.add("hidden");
+          }
+          $("fullFmtLabel").textContent = mediaFormat === "mp4" ? "MP4" : "MP3";
+          resultCard.classList.remove("hidden");
+          renderResultDownloads(data);
+          if (data.clips_enabled) {
+            clipSection.classList.remove("hidden");
+            updateClipHint();
+          } else {
+            clipSection.classList.add("hidden");
+          }
+          let tip;
+          if (fc <= 1) {
+            tip = "Ready — download full file, then you can trim clips";
+          } else if (saveFolderActive) {
+            tip = null;
+          } else {
+            tip =
+              "Prepared " +
+              fc +
+              " tracks in the app — click each ↓ below so your browser saves every file (one download per track).";
+          }
+          if (fc > 1 && saveFolderActive) {
+            showToast("Saving " + fc + " tracks to your folder…", {
+              variant: "success",
+              duration: 3200,
+            });
+            await saveAllSessionParts();
+          } else if (tip) {
+            showToast(tip);
+          }
+          if (data.prepare_warning) {
+            showToast(data.prepare_warning, { duration: 8200 });
+          }
+        } catch (e) {
+          showToast(e.message || "Prepare failed");
+        } finally {
+          btnPrepare.disabled = false;
+          prepareProgress.classList.add("hidden");
+          $("prepareHint").textContent = defaultHint;
+        }
+      });
+
+      btnSaveAllParts.addEventListener("click", () => saveAllSessionParts());
+
+      btnDownloadFull.addEventListener("click", async () => {
+        if (!sessionId) return;
+        if (lastFileCount > 1) {
+          showToast("Use the per-track buttons for this playlist.");
+          return;
+        }
+        if (saveFolderActive) {
+          btnDownloadFull.disabled = true;
+          try {
+            const r = await fetch("/api/session/" + sessionId + "/full?delivery=copy_only");
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(typeof d.detail === "string" ? d.detail : "Save failed");
+            celebrateSave("full");
+          } catch (e) {
+            showToast(e.message || "Could not save file");
+          } finally {
+            btnDownloadFull.disabled = false;
+          }
+        } else {
+          triggerGetDownload("/api/session/" + sessionId + "/full");
+          setTimeout(() => celebrateSave("browser"), 650);
+        }
+        if (lastClipsEnabled) {
+          clipSection.classList.remove("hidden");
+          updateClipHint();
+        }
+      });
+
+      btnClip.addEventListener("click", async () => {
+        if (!sessionId) return;
+        const start = $("clipStart").value.trim();
+        const end = $("clipEnd").value.trim();
+        const durVal = $("clipDur").value.trim();
+        const duration_sec = durVal === "" ? null : parseFloat(durVal);
+        const name = $("clipName").value.trim() || null;
+
+        if (!start) {
+          showToast("Enter start time");
+          return;
+        }
+        if (!end && (duration_sec == null || duration_sec <= 0)) {
+          showToast("Enter end time or duration");
+          return;
+        }
+
+        btnClip.disabled = true;
+        $("clipProgress").classList.remove("hidden");
+        try {
+          const res = await fetch("/api/session/" + sessionId + "/clip", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              start,
+              end: end || null,
+              duration_sec,
+              name,
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok)
+            throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail) || res.statusText);
+
+          if (saveFolderActive) {
+            const r2 = await fetch(
+              "/api/session/" + sessionId + "/clip/" + data.clip_id + "/file?delivery=copy_only"
+            );
+            const d2 = await r2.json().catch(() => ({}));
+            if (!r2.ok) throw new Error(typeof d2.detail === "string" ? d2.detail : "Could not save clip");
+            celebrateSave("clip");
+          } else {
+            triggerGetDownload(data.download_url);
+            setTimeout(() => celebrateSave("browser"), 650);
+          }
+        } catch (e) {
+          showToast(e.message || "Clip failed");
+        } finally {
+          btnClip.disabled = false;
+          $("clipProgress").classList.add("hidden");
+        }
+      });
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && e.target === urlEl) {
+          e.preventDefault();
+          if (!btnPrepare.disabled) btnPrepare.click();
+          return;
+        }
+        if (e.key === "Escape") {
+          const id = e.target.id;
+          if (
+            id === "clipStart" ||
+            id === "clipEnd" ||
+            id === "clipDur" ||
+            id === "clipName" ||
+            id === "downloadFolderPath"
+          )
+            return;
+          e.preventDefault();
+          const hadWork =
+            sessionId || !resultCard.classList.contains("hidden") || urlEl.value.trim().length > 0;
+          newGrab();
+          if (hadWork) showToast("New grab");
+        }
+      });
+
+      async function boot() {
+        loadFormat();
+        refreshHealth();
+        loadDownloadFolderSettings();
+        setInterval(refreshHealth, 60000);
+        try {
+          const t = await navigator.clipboard.readText();
+          if (looksLikeYt(t) && !urlEl.value.trim()) {
+            urlEl.value = t.trim();
+            fetchMetadata();
+            fetchPlaylistInfo();
+          }
+        } catch (_) {}
+      }
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", boot);
+      } else {
+        boot();
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+temp/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+download_settings.json
