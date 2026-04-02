@@ -1,0 +1,3 @@
+# Optional: native window around the local server (see desktop.py)
+-r requirements.txt
+pywebview>=5.0

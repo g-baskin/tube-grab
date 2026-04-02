@@ -73,6 +73,24 @@ Open **http://127.0.0.1:8000**
 
 If you see `Could not import module "main"`, run uvicorn from the **repository root** (this folder). If you see **Missing yt-dlp**, use **`.venv/bin/python`** as above.
 
+## Desktop app (native window, no dev reload)
+
+The dev command uses **`--reload`**, which watches files and restarts often—fine for coding, not ideal for “leave it open all day.”
+
+**`desktop.py`** starts **uvicorn without `--reload`** (more stable) and opens a **native window** (WebKit on macOS, Edge WebView2 on Windows) pointed at the local server. Closing the window stops the server.
+
+```bash
+pip install -r requirements-desktop.txt
+python desktop.py
+```
+
+- Default URL is **http://127.0.0.1:8749** (so it won’t collide with a dev server on **8000**). Override with `TUBE_GRAB_PORT=8000` if you want.
+- **macOS:** after `chmod +x tube-grab.command`, you can **double-click** `tube-grab.command` in Finder (may open a Terminal tab for logs—that’s normal).
+
+**Even more “app-like”:** you can later wrap `desktop.py` with **[PyInstaller](https://pyinstaller.org/)** into a `.app` / `.exe` (you’ll bundle Python + deps; expect a large binary). For most people, `desktop.py` + Dock shortcut is enough.
+
+**If the backend ever dies** while the window is still open, refresh won’t help until you restart `desktop.py`. A future improvement would be auto-restart on health-check failure.
+
 ## Workflow
 
 1. Paste a `youtube.com/watch?v=…`, `youtu.be/…`, or `youtube.com/playlist?…` URL (metadata loads after a short debounce).
