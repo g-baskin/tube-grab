@@ -142,6 +142,42 @@ Use **`python desktop.py`** (or a shortcut to that command). There is no `.app` 
 | `POST` | `/api/session/{id}/clip` | Create MP3 clip (single-track sessions) |
 | `GET` | `/api/session/{id}/clip/{clip_id}/file` | Download clip; with save folder → `{title}_clips/` subfolder |
 
+## Using the API from another app (e.g. soundtrack → your product)
+
+Tube Grab is a **local** tool: it **prepares** files under `./temp` and serves them over HTTP. It does **not** include “upload this file to S3 / your API” — that stays in **your** app, which should **download the bytes** from Tube Grab, then **upload** them wherever you need (storage bucket, your backend, CMS, etc.).
+
+**Typical flow (server-side, recommended):**
+
+1. `POST /api/prepare` with `url`, `format` (`mp3` | `mp4`), and optional `playlist_mode` / `playlist_items` (same JSON as the UI). Waits until yt-dlp finishes (use a long HTTP timeout, e.g. 30–60+ minutes for big playlists).
+2. Read `session_id`, `file_count`, and `files[]` from the JSON response.
+3. For **one** file: `GET /api/session/{session_id}/full` → response body is the audio/video bytes (`Content-Disposition` has a filename).
+4. For **many** tracks: `GET /api/session/{session_id}/part/0`, `/part/1`, … up to `file_count - 1`.
+5. Your code uploads those bytes to **your** service (multipart form, presigned URL, tRPC mutation, etc.).
+6. `DELETE /api/session/{session_id}` when finished to free disk (optional; sessions also expire after ~2 hours).
+
+**Port:** `desktop.py` defaults to **8749**; dev uvicorn often uses **8000**. Use the same host/port your running instance logs on startup.
+
+**Security:** Treat Tube Grab as **trusted local only** (`127.0.0.1`). Do not expose it to the public internet without putting your own auth/reverse-proxy in front. CORS is permissive for the bundled UI; for integrations, prefer calling Tube Grab from **your backend**, not from the browser, so you don’t ship a public “download anything from YouTube” endpoint.
+
+**Minimal Python example (single track):**
+
+```python
+import requests
+
+BASE = "http://127.0.0.1:8749"  # or 8000 if using uvicorn dev
+payload = {"url": "https://www.youtube.com/watch?v=VIDEO_ID", "format": "mp3", "playlist_mode": "single"}
+r = requests.post(f"{BASE}/api/prepare", json=payload, timeout=3600)
+r.raise_for_status()
+data = r.json()
+sid = data["session_id"]
+audio = requests.get(f"{BASE}/api/session/{sid}/full", timeout=600)
+audio.raise_for_status()
+# e.g. upload audio.content to your storage or POST to your API
+requests.delete(f"{BASE}/api/session/{sid}", timeout=30)
+```
+
+That’s enough to treat Tube Grab as a **“YouTube → bytes”** sidecar while your app owns uploads, metadata, and user auth.
+
 ## Notes
 
 - **`download_settings.json`** (save folder path) is **gitignored** — not committed.
