@@ -7,7 +7,7 @@ Private, local web app: pull **YouTube** audio (**MP3**) or video (**MP4**) with
 ## Clone
 
 ```bash
-git clone https://github.com/YOUR_USER/tube-grab.git
+git clone https://github.com/g-baskin/tube-grab.git
 cd tube-grab
 ```
 
