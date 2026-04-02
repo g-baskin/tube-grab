@@ -1,0 +1,26 @@
+#!/bin/bash
+# Resolves repo root as the folder that CONTAINS this .app (Tube Grab.app lives in repo root).
+set -e
+MACOS_DIR="$(cd "$(dirname "$0")" && pwd)"
+CONTENTS_DIR="$(cd "$MACOS_DIR/.." && pwd)"
+BUNDLE_DIR="$(cd "$CONTENTS_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$BUNDLE_DIR/.." && pwd)"
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+
+if [[ ! -f "$REPO_ROOT/desktop.py" ]]; then
+  osascript -e 'display alert "Tube Grab" message "This app must stay inside your Tube Grab project folder (the same folder as desktop.py). Don’t move only the .app to the Desktop — use an alias instead (right-click → Make Alias)." as critical buttons {"OK"} default button "OK"' 2>/dev/null || true
+  exit 1
+fi
+
+cd "$REPO_ROOT" || exit 1
+
+if [[ -x "$REPO_ROOT/.venv/bin/python" ]]; then
+  exec "$REPO_ROOT/.venv/bin/python" "$REPO_ROOT/desktop.py"
+fi
+
+if command -v python3 >/dev/null 2>&1; then
+  exec python3 "$REPO_ROOT/desktop.py"
+fi
+
+osascript -e 'display alert "Tube Grab" message "Python 3 not found. Create a venv in the project: python3 -m venv .venv && .venv/bin/pip install -r requirements-desktop.txt" as critical' 2>/dev/null || true
+exit 1

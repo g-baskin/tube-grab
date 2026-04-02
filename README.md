@@ -85,11 +85,31 @@ python desktop.py
 ```
 
 - Default URL is **http://127.0.0.1:8749** (so it won’t collide with a dev server on **8000**). Override with `TUBE_GRAB_PORT=8000` if you want.
-- **macOS:** after `chmod +x tube-grab.command`, you can **double-click** `tube-grab.command` in Finder (may open a Terminal tab for logs—that’s normal).
 
-**Even more “app-like”:** you can later wrap `desktop.py` with **[PyInstaller](https://pyinstaller.org/)** into a `.app` / `.exe` (you’ll bundle Python + deps; expect a large binary). For most people, `desktop.py` + Dock shortcut is enough.
+### macOS: **Tube Grab.app** (Dock icon + double-click)
 
-**If the backend ever dies** while the window is still open, refresh won’t help until you restart `desktop.py`. A future improvement would be auto-restart on health-check failure.
+The repo includes **`Tube Grab.app`** in the **project root** (next to `desktop.py`). It has a custom icon and runs `desktop.py` using your project **`.venv`** if present.
+
+1. **`pip install -r requirements-desktop.txt`** once (same as above).
+2. **Double-click `Tube Grab.app`** in Finder, or drag it to the **Dock**.
+
+**Icon on your Desktop (recommended):** don’t copy only the `.app` to the Desktop — it must stay **inside** the repo so it can find `desktop.py`. Instead:
+
+- **Option A:** In Finder, **right-click `Tube Grab.app` → Make Alias**, drag the **alias** to the Desktop, or  
+- **Option B:** Run **`./scripts/alias-to-desktop.sh`** from the repo (creates that alias for you).
+
+First launch, if macOS blocks it: **right-click the app → Open** once, or clear quarantine:  
+`xattr -dr com.apple.quarantine "Tube Grab.app"`
+
+**Also available:** **`tube-grab.command`** — double-click opens a Terminal window with server logs.
+
+### Windows
+
+Use **`python desktop.py`** (or a shortcut to that command). There is no `.app` bundle on Windows; use **PyInstaller** later if you want a `.exe` with an icon.
+
+**Even more “app-like”:** you can wrap `desktop.py` with **[PyInstaller](https://pyinstaller.org/)** into a single binary (large). For most people, **`Tube Grab.app`** or `desktop.py` is enough.
+
+**If the backend ever dies** while the window is still open, restart the app. A future improvement would be auto-restart on health-check failure.
 
 ## Workflow
 
