@@ -613,13 +613,50 @@
         }
       }
 
-      function triggerGetDownload(path) {
-        const a = document.createElement("a");
-        a.href = path;
-        a.rel = "noopener";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
+      /**
+       * Save file via fetch→blob→<a download>. Needed for pywebview / embedded shells that ignore plain navigation downloads.
+       */
+      async function triggerGetDownload(path) {
+        try {
+          const r = await fetch(path, { credentials: "same-origin" });
+          if (!r.ok) {
+            let msg = "Download failed (" + r.status + ")";
+            const ct = (r.headers.get("content-type") || "").toLowerCase();
+            if (ct.includes("application/json")) {
+              const j = await r.json().catch(() => ({}));
+              if (typeof j.detail === "string") msg = j.detail;
+            }
+            showToast(msg);
+            return;
+          }
+          const blob = await r.blob();
+          const url = URL.createObjectURL(blob);
+          let filename = "download";
+          const disp = r.headers.get("Content-Disposition");
+          if (disp) {
+            const star = disp.match(/filename\*\s*=\s*UTF-8''([^;\s]+)/i);
+            if (star) {
+              try {
+                filename = decodeURIComponent(star[1].replace(/['"]/g, ""));
+              } catch (_) {}
+            } else {
+              const q = disp.match(/filename\s*=\s*"([^"]+)"/i);
+              const u = disp.match(/filename\s*=\s*([^;\s]+)/i);
+              const raw = q ? q[1] : u ? u[1] : null;
+              if (raw) filename = raw.trim().replace(/^["']|["']$/g, "");
+            }
+          }
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = filename;
+          a.rel = "noopener";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 120000);
+        } catch (e) {
+          showToast(e.message || "Download failed");
+        }
       }
 
       function syncPlaylistListVisibility() {
@@ -773,8 +810,8 @@
             showToast(e.message || "Could not save file");
           }
         } else {
-          triggerGetDownload("/api/session/" + sessionId + "/part/" + partIndex);
-          if (celebrateBrowser) setTimeout(() => celebrateSave("browser"), 650);
+          await triggerGetDownload("/api/session/" + sessionId + "/part/" + partIndex);
+          if (celebrateBrowser) celebrateSave("browser");
         }
       }
 
@@ -1132,8 +1169,8 @@
             btnDownloadFull.disabled = false;
           }
         } else {
-          triggerGetDownload("/api/session/" + sessionId + "/full");
-          setTimeout(() => celebrateSave("browser"), 650);
+          await triggerGetDownload("/api/session/" + sessionId + "/full");
+          celebrateSave("browser");
         }
         if (lastClipsEnabled) {
           clipSection.classList.remove("hidden");
@@ -1183,8 +1220,8 @@
             if (!r2.ok) throw new Error(typeof d2.detail === "string" ? d2.detail : "Could not save clip");
             celebrateSave("clip");
           } else {
-            triggerGetDownload(data.download_url);
-            setTimeout(() => celebrateSave("browser"), 650);
+            await triggerGetDownload(data.download_url);
+            celebrateSave("browser");
           }
         } catch (e) {
           showToast(e.message || "Clip failed");
