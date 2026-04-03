@@ -12,6 +12,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -102,6 +103,8 @@ def ensure_tools() -> None:
         )
     if shutil.which("ffmpeg") is None:
         raise RuntimeError("Missing `ffmpeg` on PATH. Install: brew install ffmpeg")
+    if shutil.which("ffprobe") is None:
+        raise RuntimeError("Missing `ffprobe` on PATH. Install: brew install ffmpeg")
 
 
 @dataclass
@@ -126,20 +129,32 @@ class Session:
 
 
 sessions: dict[str, Session] = {}
+SESSION_LOCK = threading.RLock()
+
+def _get_session(session_id: str) -> Optional[Session]:
+    with SESSION_LOCK:
+        return sessions.get(session_id)
+
+
+def _store_session(session: Session) -> None:
+    with SESSION_LOCK:
+        sessions[session.id] = session
 
 
 def _cleanup_expired_sessions() -> None:
     now = time.time()
     dead: list[str] = []
-    for sid, s in sessions.items():
-        if now - s.created > SESSION_TTL_SEC:
-            dead.append(sid)
+    with SESSION_LOCK:
+        for sid, s in sessions.items():
+            if now - s.created > SESSION_TTL_SEC:
+                dead.append(sid)
     for sid in dead:
         _destroy_session(sid)
 
 
 def _destroy_session(session_id: str) -> None:
-    s = sessions.pop(session_id, None)
+    with SESSION_LOCK:
+        s = sessions.pop(session_id, None)
     if not s:
         return
     d = s.full_path.parent
@@ -993,7 +1008,7 @@ async def api_prepare(body: PrepareBody) -> JSONResponse:
                 else:
                     prepare_warning = "Some selected tracks could not be downloaded." + suffix
 
-    sessions[sid] = Session(
+    _store_session(Session(
         id=sid,
         created=time.time(),
         full_path=paths[0],
@@ -1003,7 +1018,7 @@ async def api_prepare(body: PrepareBody) -> JSONResponse:
         media_format=fmt,
         media_paths=list(paths),
         media_titles=list(titles),
-    )
+    ))
 
     ext = paths[0].suffix.lstrip(".") or fmt
     files_out = [
@@ -1041,7 +1056,7 @@ async def download_full(
     ),
 ):
     _cleanup_expired_sessions()
-    s = sessions.get(session_id)
+    s = _get_session(session_id)
     if not s or not s.full_path.is_file():
         raise HTTPException(status_code=404, detail="Session or file not found")
     if len(s.media_paths) > 1:
@@ -1094,7 +1109,7 @@ async def download_part(
     ),
 ):
     _cleanup_expired_sessions()
-    s = sessions.get(session_id)
+    s = _get_session(session_id)
     if not s or part_index < 0 or part_index >= len(s.media_paths):
         raise HTTPException(status_code=404, detail="Session or part not found")
     path = s.media_paths[part_index]
@@ -1138,7 +1153,7 @@ async def download_part(
 @app.post("/api/session/{session_id}/clip")
 async def create_clip(session_id: str, body: ClipBody) -> JSONResponse:
     _cleanup_expired_sessions()
-    s = sessions.get(session_id)
+    s = _get_session(session_id)
     if not s:
         raise HTTPException(status_code=404, detail="Session not found")
     if s.media_format != "mp3":
@@ -1235,7 +1250,7 @@ async def download_clip(
     ),
 ):
     _cleanup_expired_sessions()
-    s = sessions.get(session_id)
+    s = _get_session(session_id)
     if not s:
         raise HTTPException(status_code=404, detail="Session not found")
     path = s.clip_paths.get(clip_id)
