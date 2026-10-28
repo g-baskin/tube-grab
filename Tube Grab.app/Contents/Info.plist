@@ -4,6 +4,8 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>Tube Grab</string>
 	<key>CFBundleExecutable</key>
 	<string>tubegrab</string>
 	<key>CFBundleIconFile</key>
@@ -24,5 +26,7 @@
 	<string>11.0</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 AutomationGod. Free software under the GNU GPL v3 or later.</string>
 </dict>
 </plist>

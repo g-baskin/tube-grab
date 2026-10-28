@@ -24,6 +24,7 @@ import urllib.request
 from pathlib import Path
 
 APP_DIR = Path(__file__).resolve().parent
+APP_NAME = "Tube Grab"
 
 
 def _pick_port() -> int:
@@ -45,6 +46,27 @@ def _wait_ready(port: int, timeout_sec: float = 90.0) -> bool:
         except (urllib.error.URLError, OSError, TimeoutError):
             time.sleep(0.25)
     return False
+
+
+def _set_macos_app_name(name: str) -> None:
+    """Show ``name`` instead of "Python" in the menu bar, Dock, app switcher and Activity Monitor.
+
+    The window runs inside the Python framework's own app bundle, so macOS takes the
+    name from that bundle. Override it in memory before pywebview creates the app.
+    """
+    if sys.platform != "darwin":
+        return
+    try:
+        import AppKit
+        import Foundation
+    except ImportError:  # PyObjC ships with pywebview on macOS; skip quietly if absent.
+        return
+    bundle = AppKit.NSBundle.mainBundle()
+    for info in (bundle.infoDictionary(), bundle.localizedInfoDictionary()):
+        if info is not None:
+            info["CFBundleName"] = name
+            info["CFBundleDisplayName"] = name
+    Foundation.NSProcessInfo.processInfo().setProcessName_(name)
 
 
 def main() -> None:
@@ -79,9 +101,11 @@ def main() -> None:
 
     if not _wait_ready(port):
         cleanup()
-        print("Tube Grab: server did not become ready in time.", file=sys.stderr)
+        print(f"{APP_NAME}: server did not become ready in time.", file=sys.stderr)
         sys.exit(1)
 
+    # Must run before pywebview starts the macOS app (on import of its Cocoa backend).
+    _set_macos_app_name(APP_NAME)
     try:
         import webview
     except ImportError:
@@ -93,7 +117,7 @@ def main() -> None:
         sys.exit(1)
 
     webview.create_window(
-        "Tube Grab",
+        APP_NAME,
         f"http://127.0.0.1:{port}",
         width=1180,
         height=820,

@@ -2,8 +2,13 @@
 <html lang="en" class="h-full">
 <head>
   <meta charset="UTF-8" />
+  <meta name="description" content="Tube Grab by AutomationGod: a local YouTube downloader for MP3, M4A and MP4, with playlist support and fast MP3 clips. Runs as a macOS desktop app or in your browser." />
+  <meta name="keywords" content="Tube Grab, AutomationGod, YouTube downloader, YouTube to MP3, YouTube to M4A, YouTube to MP4, playlist downloader, MP3 clips, yt-dlp, ffmpeg, local, macOS" />
+  <meta name="author" content="AutomationGod" />
+  <meta name="application-name" content="Tube Grab" />
+  <meta name="theme-color" content="#09090b" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Tube Grab + Clip</title>
+  <title>Tube Grab</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -43,10 +48,37 @@
     #toast.is-visible #toastPanel {
       animation: toast-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
+    /* Background video: a 16:9 player scaled to cover the whole window. */
+    #bgVideoLayer {
+      opacity: 0;
+      transition: opacity 1.2s ease;
+    }
+    #bgVideoLayer.is-playing {
+      opacity: 1;
+    }
+    #bgVideoLayer iframe,
+    #bgVideoPlayer {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 100vw;
+      height: 56.25vw;
+      min-width: 177.78vh;
+      min-height: 100vh;
+      /* Slight blur + scale: softens burned-in captions and hides the blurred edge. */
+      transform: translate(-50%, -50%) scale(1.06);
+      filter: blur(3px);
+      border: 0;
+    }
   </style>
 </head>
 <body class="h-full min-h-screen bg-zinc-950 text-zinc-100 antialiased">
-  <div class="mx-auto flex min-h-screen max-w-lg flex-col px-4 py-10 sm:py-14">
+  <!-- Background video: decorative, muted, never focusable or clickable. -->
+  <div id="bgVideoLayer" class="pointer-events-none fixed inset-0 z-0 hidden overflow-hidden" aria-hidden="true">
+    <div id="bgVideoPlayer"></div>
+    <div class="absolute inset-0 bg-zinc-950/75"></div>
+  </div>
+  <div class="relative z-10 mx-auto flex min-h-screen max-w-lg flex-col px-4 py-10 sm:py-14">
     <header class="mb-8 text-center">
       <div class="flex items-center justify-center gap-3">
         <h1 class="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Tube Grab</h1>
@@ -57,7 +89,7 @@
           aria-label="Server health"
         ></span>
       </div>
-      <p class="mt-2 text-sm text-zinc-400">YouTube audio or video, then fast MP3 clips (local only)</p>
+      <p class="mt-2 text-sm text-zinc-400">YouTube to MP3, M4A or MP4 · playlists · fast MP3 clips (local only)</p>
     </header>
 
     <main class="flex flex-1 flex-col gap-6">
@@ -187,6 +219,46 @@
             id="updatesLog"
             class="hidden max-h-40 overflow-y-auto rounded-lg bg-zinc-950 p-3 text-[11px] leading-relaxed text-zinc-400 whitespace-pre-wrap"
           ></pre>
+        </div>
+      </section>
+
+      <!-- Background video panel -->
+      <section id="bgPanel" class="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4" aria-labelledby="bgHeading">
+        <div class="flex items-center justify-between gap-3">
+          <h3 id="bgHeading" class="text-xs font-semibold uppercase tracking-wider text-zinc-500">Background video</h3>
+          <label class="inline-flex cursor-pointer items-center gap-2 text-xs text-zinc-300">
+            <input type="checkbox" id="bgToggle" class="accent-emerald-500" />
+            Play
+          </label>
+        </div>
+        <p id="bgStatus" class="mt-1 min-h-[1rem] text-xs text-zinc-500" aria-live="polite">Muted random videos behind the app.</p>
+        <div class="mt-3 flex gap-2">
+          <input
+            id="bgPlaylistUrl"
+            type="url"
+            inputmode="url"
+            autocomplete="off"
+            aria-label="Background video playlist URL"
+            placeholder="YouTube playlist URL (optional)"
+            class="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs text-white placeholder:text-zinc-600 focus:border-emerald-600/60 focus:outline-none focus:ring-1 focus:ring-emerald-600/30"
+          />
+          <button
+            type="button"
+            id="btnBgUsePlaylist"
+            class="shrink-0 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
+          >Use playlist</button>
+        </div>
+        <div class="mt-2 flex flex-wrap gap-2">
+          <button
+            type="button"
+            id="btnBgNext"
+            class="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-medium text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+          >Next video</button>
+          <button
+            type="button"
+            id="btnBgBuiltIn"
+            class="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-medium text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+          >Use built-in videos</button>
         </div>
       </section>
 
@@ -1387,6 +1459,292 @@
         $('btnRunUpdate').addEventListener('click', runUpdate);
       })();
       // ── end Updates panel ────────────────────────────────────────────
+
+      // ── Background video ─────────────────────────────────────────────
+      // Muted random YouTube videos behind the UI. Built-in list or a playlist the user picks.
+      (function () {
+        const LS_BG_ON = "tubegrab:bgVideo";
+        const LS_BG_PLAYLIST = "tubegrab:bgPlaylist";
+        // Long, calm, embeddable videos (checked with yt-dlp: public, playable_in_embed).
+        const BUILT_IN_IDS = [
+          "rV_ERKtNyNA", // birds, nature relaxation
+          "wXHltv4adI8", // waterfalls
+          "EColTNIbOko", // forests from above
+          "znnSGHMnCzo", // underwater
+          "G1hKzCkywM8", // aerial views
+          "lM02vNMRRB0", // earth from above
+          "_kvEuReNgsw", // aquarium coral reef
+          "mPZkdNFkNps", // rain on window
+        ];
+        const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
+        const SWITCH_MS = 5 * 60 * 1000; // new random video every 5 minutes
+        const API_TIMEOUT_MS = 20000;
+
+        const layer = $("bgVideoLayer");
+        const toggle = $("bgToggle");
+        const status = $("bgStatus");
+        const playlistInput = $("bgPlaylistUrl");
+        const btnUsePlaylist = $("btnBgUsePlaylist");
+        const btnNext = $("btnBgNext");
+        const btnBuiltIn = $("btnBgBuiltIn");
+
+        let ids = BUILT_IN_IDS.slice();
+        let sourceLabel = "built-in videos";
+        let player = null;
+        let playerReady = false;
+        let currentId = null;
+        let seekedFor = null;
+        let switchTimer = null;
+        let errorStreak = 0;
+        let apiPromise = null;
+
+        function isEnabled() {
+          const stored = localStorage.getItem(LS_BG_ON);
+          if (stored !== null) return stored === "1";
+          // On by default, except for people who asked their system for reduced motion.
+          return !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        }
+
+        function setStatus(msg) {
+          status.textContent = msg;
+        }
+
+        function playlistIdFrom(raw) {
+          let u;
+          try {
+            u = new URL(raw.trim());
+          } catch (_) {
+            return null;
+          }
+          const host = u.hostname.replace(/^www\.|^m\.|^music\./, "");
+          if (host !== "youtube.com" && host !== "youtu.be") return null;
+          const list = u.searchParams.get("list");
+          return list && /^[A-Za-z0-9_-]+$/.test(list) ? list : null;
+        }
+
+        function loadYouTubeApi() {
+          if (window.YT && window.YT.Player) return Promise.resolve();
+          if (apiPromise) return apiPromise;
+          apiPromise = new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error("YouTube player did not load")), API_TIMEOUT_MS);
+            const previous = window.onYouTubeIframeAPIReady;
+            window.onYouTubeIframeAPIReady = () => {
+              clearTimeout(timer);
+              if (typeof previous === "function") previous();
+              resolve();
+            };
+            const s = document.createElement("script");
+            s.src = "https://www.youtube.com/iframe_api";
+            s.async = true;
+            s.onerror = () => {
+              clearTimeout(timer);
+              reject(new Error("YouTube player did not load"));
+            };
+            document.head.appendChild(s);
+          }).catch((e) => {
+            apiPromise = null; // allow a retry later
+            throw e;
+          });
+          return apiPromise;
+        }
+
+        function pickId() {
+          const pool = ids.length > 1 ? ids.filter((id) => id !== currentId) : ids;
+          return pool[Math.floor(Math.random() * pool.length)];
+        }
+
+        function scheduleSwitch() {
+          clearTimeout(switchTimer);
+          switchTimer = setTimeout(playNext, SWITCH_MS);
+        }
+
+        function playNext() {
+          if (!player || !playerReady || !isEnabled()) return;
+          currentId = pickId();
+          seekedFor = null;
+          player.loadVideoById(currentId);
+          player.mute();
+          scheduleSwitch();
+        }
+
+        function onReady(e) {
+          playerReady = true;
+          const frame = e.target.getIframe();
+          frame.setAttribute("tabindex", "-1");
+          frame.setAttribute("title", "Background video");
+          e.target.mute();
+          // Switched off (or window hidden) while the player was still loading: stay paused.
+          if (!isEnabled() || document.hidden) {
+            e.target.pauseVideo();
+            return;
+          }
+          e.target.playVideo();
+          scheduleSwitch();
+        }
+
+        function onStateChange(e) {
+          const S = window.YT.PlayerState;
+          if (e.data === S.PLAYING) {
+            errorStreak = 0;
+            layer.classList.add("is-playing");
+            setStatus("Playing muted random videos from " + sourceLabel + ".");
+            // Long videos: jump to a random spot once, so each play looks different.
+            if (seekedFor !== currentId) {
+              seekedFor = currentId;
+              const d = e.target.getDuration();
+              if (d > 600) e.target.seekTo(Math.floor(Math.random() * (d - 300)), true);
+            }
+          } else if (e.data === S.ENDED) {
+            playNext();
+          }
+        }
+
+        function onError() {
+          // Unembeddable, removed or private video: try another, but don't loop forever.
+          errorStreak += 1;
+          if (errorStreak >= Math.max(3, Math.min(ids.length, 10))) {
+            clearTimeout(switchTimer);
+            layer.classList.remove("is-playing");
+            setStatus("Couldn't play any of these videos. Try another playlist or the built-in videos.");
+            return;
+          }
+          setTimeout(playNext, 1000);
+        }
+
+        async function start() {
+          layer.classList.remove("hidden");
+          setStatus("Loading background video…");
+          try {
+            await loadYouTubeApi();
+          } catch (e) {
+            layer.classList.add("hidden");
+            setStatus("Background video unavailable (offline?). " + (e.message || ""));
+            return;
+          }
+          if (!isEnabled()) return; // switched off while loading
+          if (player) {
+            playNext();
+            return;
+          }
+          currentId = pickId();
+          player = new window.YT.Player("bgVideoPlayer", {
+            host: "https://www.youtube-nocookie.com",
+            videoId: currentId,
+            playerVars: {
+              autoplay: 1,
+              mute: 1,
+              controls: 0,
+              disablekb: 1,
+              fs: 0,
+              iv_load_policy: 3,
+              playsinline: 1,
+              rel: 0,
+              origin: window.location.origin,
+            },
+            events: { onReady, onStateChange, onError },
+          });
+        }
+
+        function stop() {
+          clearTimeout(switchTimer);
+          layer.classList.remove("is-playing");
+          if (player && playerReady) player.pauseVideo();
+          setTimeout(() => {
+            if (!isEnabled()) layer.classList.add("hidden");
+          }, 1300); // after the fade-out
+          setStatus("Off. Muted random videos behind the app.");
+        }
+
+        function syncButtons() {
+          const on = isEnabled();
+          toggle.checked = on;
+          btnNext.disabled = !on;
+        }
+
+        async function loadPlaylist(listId) {
+          const r = await fetch("/api/playlist-info", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: "https://www.youtube.com/playlist?list=" + listId }),
+          });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(data.detail || "Could not read that playlist");
+          const found = (data.entries || []).map((e) => e && e.id).filter((id) => VIDEO_ID_RE.test(id || ""));
+          if (!found.length) throw new Error("That playlist has no playable videos");
+          return { ids: found, title: data.playlist_title || "your playlist" };
+        }
+
+        async function usePlaylist(listId, { quiet } = {}) {
+          btnUsePlaylist.disabled = true;
+          setStatus("Reading playlist…");
+          try {
+            const pl = await loadPlaylist(listId);
+            ids = pl.ids;
+            sourceLabel = "“" + pl.title + "” (" + pl.ids.length + ")";
+            errorStreak = 0;
+            localStorage.setItem(LS_BG_PLAYLIST, listId);
+            if (!quiet) showToast("Background now uses " + sourceLabel, { variant: "success", duration: 3500 });
+            if (isEnabled()) (player ? playNext() : start());
+            else setStatus("Playlist saved: " + sourceLabel + ". Switch on Play to start.");
+          } catch (e) {
+            const msg = e.message || "Could not read that playlist";
+            setStatus(msg + ". Using " + sourceLabel + ".");
+            if (!quiet) showToast(msg);
+            if (isEnabled() && !player) start();
+          } finally {
+            btnUsePlaylist.disabled = false;
+          }
+        }
+
+        toggle.addEventListener("change", () => {
+          localStorage.setItem(LS_BG_ON, toggle.checked ? "1" : "0");
+          syncButtons();
+          if (toggle.checked) start();
+          else stop();
+        });
+
+        btnUsePlaylist.addEventListener("click", () => {
+          const listId = playlistIdFrom(playlistInput.value);
+          if (!listId) {
+            showToast("Paste a YouTube playlist link (it has list= in it).");
+            return;
+          }
+          usePlaylist(listId);
+        });
+
+        btnBuiltIn.addEventListener("click", () => {
+          localStorage.removeItem(LS_BG_PLAYLIST);
+          playlistInput.value = "";
+          ids = BUILT_IN_IDS.slice();
+          sourceLabel = "built-in videos";
+          errorStreak = 0;
+          if (isEnabled()) (player ? playNext() : start());
+          else setStatus("Using built-in videos. Switch on Play to start.");
+        });
+
+        btnNext.addEventListener("click", () => {
+          errorStreak = 0;
+          if (player) playNext();
+          else start();
+        });
+
+        // Save CPU and bandwidth while the window is hidden.
+        document.addEventListener("visibilitychange", () => {
+          if (!player || !playerReady || !isEnabled()) return;
+          if (document.hidden) player.pauseVideo();
+          else player.playVideo();
+        });
+
+        syncButtons();
+        const savedList = localStorage.getItem(LS_BG_PLAYLIST);
+        if (savedList && /^[A-Za-z0-9_-]+$/.test(savedList)) {
+          playlistInput.value = "https://www.youtube.com/playlist?list=" + savedList;
+          usePlaylist(savedList, { quiet: true });
+        } else if (isEnabled()) {
+          start();
+        }
+      })();
+      // ── end Background video ─────────────────────────────────────────
 
       async function boot() {
         loadFormat();
