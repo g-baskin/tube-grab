@@ -10,3 +10,7 @@ download_settings.json
 # Local AI editor/agent settings (personal, not part of the app)
 .claude/
 .cursor/
+
+# GG Coder local state (project checklist, local agents/commands/skills)
+.gg/
+.gg-checklist.json
