@@ -1,5 +1,7 @@
 # Tube Grab
 
+![Tube Grab: YouTube videos flowing into the Tube Grab tube and out as an audio waveform with a trimmed clip](branding/readme-hero.jpg)
+
 Private, local web app: pull **YouTube** audio (**MP3**) or video (**MP4**) with **yt-dlp**, optional **playlists** (this video only / selected tracks / full list), fast **MP3 clips** with **ffmpeg** stream copy (`-c copy`). Single-page UI + FastAPI; files land in `./temp` until you save or the session expires (~2 hours).
 
 **Use responsibly:** personal/archival use; respect YouTube’s terms and copyright.
