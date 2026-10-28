@@ -191,4 +191,10 @@ That’s enough to treat Tube Grab as a **“YouTube → bytes”** sidecar whil
 
 ## License
 
-Private repository; no license file included unless you add one. Use and share at your own discretion.
+Copyright (C) 2026 AutomationGod
+
+Tube Grab is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+Tube Grab is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the full text in [LICENSE](LICENSE).
+
+**Attribution (additional term under GPLv3 section 7(b)):** if you convey Tube Grab or a modified version, keep the copyright notices and the author attribution "Tube Grab © 2026 AutomationGod" intact in the source files, in this README, and in the app's footer.

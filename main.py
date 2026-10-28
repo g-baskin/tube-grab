@@ -1,3 +1,5 @@
+# Tube Grab - Copyright (C) 2026 AutomationGod
+# SPDX-License-Identifier: GPL-3.0-or-later
 """
 Personal YouTube audio/video downloader + fast MP3 clip trimmer.
 """

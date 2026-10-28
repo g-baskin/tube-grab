@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Tube Grab - Copyright (C) 2026 AutomationGod
+# SPDX-License-Identifier: GPL-3.0-or-later
 """
 Tube Grab — desktop shell: starts uvicorn (no --reload) and opens a native window.
 
