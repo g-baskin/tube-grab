@@ -9,3 +9,7 @@ download_settings.json
 
 # Per-machine symlink to the local Python, created by the Tube Grab.app launcher
 Tube Grab.app/Contents/MacOS/Tube Grab
+
+# Local AI editor/agent settings (personal, not part of the app)
+.claude/
+.cursor/
