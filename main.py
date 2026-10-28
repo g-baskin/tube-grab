@@ -1,7 +1,8 @@
 # Tube Grab - Copyright (C) 2026 AutomationGod
 # SPDX-License-Identifier: GPL-3.0-or-later
 """
-Personal YouTube audio/video downloader + fast MP3 clip trimmer.
+Tube Grab by AutomationGod: local YouTube downloader (MP3, M4A, MP4) with playlists
+and a fast MP3 clip trimmer.
 """
 
 from __future__ import annotations
@@ -686,7 +687,13 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="Music Downloader", lifespan=lifespan)
+app = FastAPI(
+    title="Tube Grab",
+    description="Local YouTube downloader (MP3, M4A, MP4) with playlists and fast MP3 clips. By AutomationGod.",
+    version="1.0",
+    license_info={"name": "GPL-3.0-or-later", "identifier": "GPL-3.0-or-later"},
+    lifespan=lifespan,
+)
 
 app.add_middleware(
     CORSMiddleware,

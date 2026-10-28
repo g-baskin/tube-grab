@@ -14,8 +14,25 @@ fi
 
 cd "$REPO_ROOT" || exit 1
 
-if [[ -x "$REPO_ROOT/.venv/bin/python" ]]; then
-  exec "$REPO_ROOT/.venv/bin/python" "$REPO_ROOT/desktop.py"
+VENV_PY="$REPO_ROOT/.venv/bin/python"
+if [[ -x "$VENV_PY" ]]; then
+  # Run Python from inside this bundle so macOS shows "Tube Grab" (menu bar, Dock, app switcher)
+  # with this app's icon instead of "Python". It must be a symlink: a copied interpreter is killed
+  # by macOS code signing. __PYVENV_LAUNCHER__ is how the framework's own stub selects the venv.
+  # The symlink points at this machine's Python, so it is created here and gitignored.
+  REAL_PY="$("$VENV_PY" -c 'import os, sys; print(os.path.join(sys.base_prefix, "Resources", "Python.app", "Contents", "MacOS", "Python"))' 2>/dev/null || true)"
+  BUNDLE_PY="$MACOS_DIR/Tube Grab"
+  if [[ -n "$REAL_PY" && -x "$REAL_PY" ]]; then
+    if [[ "$(readlink "$BUNDLE_PY" 2>/dev/null || true)" != "$REAL_PY" ]]; then
+      ln -sfn "$REAL_PY" "$BUNDLE_PY" 2>/dev/null || true
+    fi
+    if [[ -x "$BUNDLE_PY" ]]; then
+      export __PYVENV_LAUNCHER__="$VENV_PY"
+      exec "$BUNDLE_PY" "$REPO_ROOT/desktop.py"
+    fi
+  fi
+  # Not a framework Python (or the bundle is read-only): run as before; the window still opens.
+  exec "$VENV_PY" "$REPO_ROOT/desktop.py"
 fi
 
 if command -v python3 >/dev/null 2>&1; then
