@@ -1,8 +1,10 @@
 # Tube Grab
 
-![Tube Grab: YouTube videos flowing into the Tube Grab tube and out as an audio waveform with a trimmed clip](branding/readme-hero.jpg)
+![Tube Grab by AutomationGod: YouTube videos flowing into the Tube Grab tube and out as an audio waveform with a trimmed clip](branding/readme-hero.jpg)
 
-Private, local web app: pull **YouTube** audio (**MP3**) or video (**MP4**) with **yt-dlp**, optional **playlists** (this video only / selected tracks / full list), fast **MP3 clips** with **ffmpeg** stream copy (`-c copy`). Single-page UI + FastAPI; files land in `./temp` until you save or the session expires (~2 hours).
+**By AutomationGod.** A local YouTube downloader: grab audio as **MP3** or **M4A**, or video as **MP4**, with **yt-dlp**. Download a single video, selected tracks or a whole **playlist**, and cut fast **MP3 clips** with **ffmpeg** stream copy (`-c copy`).
+
+Runs as a macOS desktop app (**Tube Grab.app**) or in any browser, with a FastAPI backend. Everything stays on your machine: files land in `./temp` until you save them or the session expires (~2 hours).
 
 **Use responsibly:** personal/archival use; respect YouTube’s terms and copyright.
 
@@ -118,7 +120,7 @@ Use **`python desktop.py`** (or a shortcut to that command). There is no `.app` 
 ## Workflow
 
 1. Paste a `youtube.com/watch?v=…`, `youtu.be/…`, or `youtube.com/playlist?…` URL (metadata loads after a short debounce).
-2. If the URL is a **playlist** (`list=` on watch URLs or a `/playlist?list=` page), choose **This video only**, **Selected tracks**, or **Entire playlist**. Then pick **MP3** or **MP4**.
+2. If the URL is a **playlist** (`list=` on watch URLs or a `/playlist?list=` page), choose **This video only**, **Selected tracks**, or **Entire playlist**. Then pick **MP3**, **M4A** (faster: no conversion, no clips) or **MP4**.
 3. Tap **Download Full** to run yt-dlp (can take a long time for big playlists). That step prepares files on the server. **Multiple tracks:** with a **locked save folder**, tracks are **copied there automatically** when prepare finishes; without it, click **each ↓** so the browser saves every file.
 4. **Single MP3 file only:** set **Start**, **End** or **Duration**, optional clip name → **Generate & Download Clip** (ffmpeg stream copy; frame-aligned, not sample-perfect).
 
@@ -145,6 +147,8 @@ Use **`python desktop.py`** (or a shortcut to that command). There is no `.app` 
 | `GET` | `/api/session/{id}/part/{n}` | Per-track download when `file_count` > 1 |
 | `POST` | `/api/session/{id}/clip` | Create MP3 clip (single-track sessions) |
 | `GET` | `/api/session/{id}/clip/{clip_id}/file` | Download clip; with save folder → `{title}_clips/` subfolder |
+| `GET` | `/api/updates/check` | Installed vs latest yt-dlp, and whether `yt-dlp-ejs` is installed |
+| `POST` | `/api/updates/run` | Upgrade `yt-dlp[default]` in the project venv |
 
 ## Using the API from another app (e.g. soundtrack → your product)
 
