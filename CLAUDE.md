@@ -21,6 +21,11 @@ Single-user local tool: FastAPI (`main.py`) shells out to yt-dlp/ffmpeg to downl
 - `/api/updates/check` runs blocking `subprocess.run`/`urlopen` inside `async def`. Use `asyncio.to_thread` (as everywhere else) rather than copying that pattern.
 - **macOS app name:** the window process runs inside Python.framework's `Python.app`, so the menu bar says "Python". Setting `CFBundleName` or `setProcessName_` in-process changes LaunchServices' name but **not** the menu bar. What works is running the interpreter through a symlink inside `Tube Grab.app/Contents/MacOS/` with `__PYVENV_LAUNCHER__=<venv python>`. A *copied* interpreter is SIGKILLed by code signing.
 
+## Branches
+- **Never delete `dev`, `qa` or `main`** (owner's rule). GitHub rulesets enforce it: "Protect main and qa" (PR required, no force-push or deletion) and "Keep dev" (no deletion).
+- Flow: `feature/<slug>` → PR into `dev` → PR `dev`→`qa` → PR `qa`→`main`; never push straight to `qa`/`main` (GitHub rejects it).
+- "Automatically delete head branches" is on, so merging a `dev`→`qa` PR tries to delete `dev`; the "Keep dev" rule is what stops that. Don't remove that ruleset or turn deletion protection off.
+
 ## Running and restarting
 - `python main.py` = dev server on :8000 with reload. The desktop paths (`Tube Grab.app`, `tube-grab.command`, `desktop.py`) use :8749 and never reload, so a running window serves old code until relaunched.
 - **Relaunch check:** the uvicorn child can outlive `desktop.py` (orphaned to launchd, still on :8749), and SIGTERM to `desktop.py` can be slow or ignored while the Cocoa loop runs. A new launch then fails to bind, but its health poll succeeds against the **stale** server, so old code keeps running with no error. Before relaunching, confirm `lsof -iTCP:8749 -sTCP:LISTEN` is empty, and stop leftovers by exact PID.
