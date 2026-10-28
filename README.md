@@ -90,7 +90,7 @@ python desktop.py
 
 ### macOS: **Tube Grab.app** (Dock icon + double-click)
 
-The repo includes **`Tube Grab.app`** in the **project root** (next to `desktop.py`). It has a custom icon and runs `desktop.py` using your project **`.venv`** if present.
+The repo includes **`Tube Grab.app`** in the **project root** (next to `desktop.py`). It has a custom icon and runs `desktop.py` using your project **`.venv`** if present. On first launch it adds a symlink to your Python inside the bundle (gitignored), so the menu bar and Dock say **Tube Grab** instead of **Python**.
 
 1. **`pip install -r requirements-desktop.txt`** once (same as above).
 2. **Double-click `Tube Grab.app`** in Finder, or drag it to the **Dock**.
