@@ -15,6 +15,8 @@ cd tube-grab
 
 Install **yt-dlp** and **ffmpeg** and ensure both are on your `PATH`.
 
+For YouTube, yt-dlp also needs a JavaScript runtime: install **[Deno](https://deno.com/)** (macOS: `brew install deno`). See yt-dlp's [EJS guide](https://github.com/yt-dlp/yt-dlp/wiki/EJS) for other options.
+
 ### macOS (Homebrew)
 
 ```bash
@@ -123,7 +125,7 @@ Use **`python desktop.py`** (or a shortcut to that command). There is no `.app` 
 - **Entire playlist** is one long yt-dlp run (sequential). The UI bar stays indeterminate; keep the tab open.
 - The picker lists up to **200** titles; **Entire playlist** still downloads the **full** list via yt-dlp.
 - The app uses **`-N 4`** (concurrent fragments) for faster segments; tune **`YTDLP_CONCURRENT_FRAGMENTS`** in `main.py` if you like.
-- Keep **yt-dlp** updated (`pip install -U yt-dlp`). Unavailable entries are skipped with **`--ignore-errors`**.
+- Keep **yt-dlp** updated (`pip install -U "yt-dlp[default]"`; the `default` extra adds **yt-dlp-ejs**, which YouTube needs). Unavailable entries are skipped with **`--ignore-errors`**.
 
 ## API (for scripts)
 

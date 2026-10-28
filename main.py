@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, List, Literal, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
+import urllib.request
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,6 +38,9 @@ METADATA_TIMEOUT = 90
 DOWNLOAD_TIMEOUT = 3600
 # Faster DASH/HLS per file (YouTube). See yt-dlp -N / --concurrent-fragments.
 YTDLP_CONCURRENT_FRAGMENTS = 4
+# What the in-app updater installs. The "default" extra adds yt-dlp-ejs, which yt-dlp needs
+# (with a JS runtime such as Deno) to solve YouTube's JavaScript challenges.
+YTDLP_PIP_REQUIREMENT = "yt-dlp[default]"
 
 _ytdlp_cmd_cache: Optional[list[str]] = None
 _ytdlp_probe_failed: bool = False
@@ -115,7 +119,7 @@ class Session:
     title: str
     duration_sec: float
     thumbnail: Optional[str]
-    media_format: str  # "mp3" | "mp4"
+    media_format: str  # "mp3" | "m4a" | "mp4"
     media_paths: List[Path] = field(default_factory=list)
     media_titles: List[str] = field(default_factory=list)
 
@@ -246,7 +250,7 @@ def humanize_ytdlp_error(text: str) -> str:
     if "sign in to confirm" in low or "not a bot" in low or "inappropriate for some users" in low:
         return (
             "YouTube wants sign-in or thinks the request is automated. "
-            "Try: pip install -U yt-dlp — or use cookies (see yt-dlp README)."
+            'Try: pip install -U "yt-dlp[default]" — or use cookies (see yt-dlp README).'
         )
     if "private video" in low:
         return "This video is private."
@@ -259,7 +263,7 @@ def humanize_ytdlp_error(text: str) -> str:
     if "not available in your country" in low or "region" in low and "blocked" in low:
         return "Not available in your region."
     if "http error 403" in low or " 403 " in low:
-        return "Access denied (403). Update yt-dlp: pip install -U yt-dlp"
+        return 'Access denied (403). Update yt-dlp: pip install -U "yt-dlp[default]"'
     if "http error 429" in low or " 429 " in low:
         return "Too many requests — wait a bit and try again."
     if "live stream" in low or "premiere" in low:
@@ -336,6 +340,24 @@ def _run_ytdlp_download(url: str, out_dir: Path, media_format: str) -> Path:
             out_tmpl,
             url.strip(),
         ]
+    elif media_format == "m4a":
+        # Keep YouTube's AAC stream as-is; -x only converts if no m4a stream exists.
+        cmd = [
+            *base,
+            "-N",
+            str(YTDLP_CONCURRENT_FRAGMENTS),
+            "--no-playlist",
+            "-f",
+            "ba[ext=m4a]/ba",
+            "-x",
+            "--audio-format",
+            "m4a",
+            "--audio-quality",
+            "0",
+            "-o",
+            out_tmpl,
+            url.strip(),
+        ]
     else:
         cmd = [
             *base,
@@ -359,10 +381,7 @@ def _run_ytdlp_download(url: str, out_dir: Path, media_format: str) -> Path:
     if p.returncode != 0:
         raw = (p.stderr or p.stdout or "").strip() or "Download failed"
         raise HTTPException(status_code=400, detail=humanize_ytdlp_error(raw))
-    if media_format == "mp3":
-        candidates = list(out_dir.glob("full.mp3"))
-    else:
-        candidates = list(out_dir.glob("full.mp4"))
+    candidates = list(out_dir.glob(f"full.{media_format}"))
     if not candidates:
         candidates = list(out_dir.glob("full.*"))
     if not candidates:
@@ -394,10 +413,12 @@ def _run_ytdlp_download_playlist(
         cmd.extend(["--playlist-items", playlist_items.strip()])
     if media_format == "mp3":
         cmd.extend(["-x", "--audio-format", "mp3", "--audio-quality", "0"])
+    elif media_format == "m4a":
+        cmd.extend(["-f", "ba[ext=m4a]/ba", "-x", "--audio-format", "m4a", "--audio-quality", "0"])
     else:
         cmd.extend(["-f", "bv*+ba/b", "--merge-output-format", "mp4"])
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-    ext = "mp3" if media_format == "mp3" else "mp4"
+    ext = media_format if media_format in ("mp3", "m4a") else "mp4"
     paths = sorted(out_dir.glob(f"*.{ext}"))
     if not paths:
         paths = sorted(
@@ -533,6 +554,11 @@ def _safe_filename_base(name: str) -> str:
     name = re.sub(r'[^\w\s\-().]', "", name).strip()
     name = re.sub(r"\s+", "_", name)
     return name[:120] if name else "clip"
+
+
+def _media_type(media_format: str) -> str:
+    """Content-Type for a prepared session file."""
+    return {"mp3": "audio/mpeg", "m4a": "audio/mp4"}.get(media_format, "video/mp4")
 
 
 def _session_clips_subdir_name(s: Session) -> str:
@@ -675,7 +701,7 @@ class MetadataBody(BaseModel):
 
 class PrepareBody(BaseModel):
     url: str
-    format: str = Field(default="mp3", description="mp3 or mp4")
+    format: str = Field(default="mp3", description="mp3, m4a or mp4")
     previous_session_id: Optional[str] = None
     playlist_mode: Literal["single", "all", "items"] = "single"
     playlist_items: Optional[str] = Field(
@@ -922,8 +948,8 @@ async def api_prepare(body: PrepareBody) -> JSONResponse:
     if not _youtube_url_ok(body.url):
         raise HTTPException(status_code=400, detail="Invalid or unsupported YouTube URL")
     fmt = body.format.strip().lower()
-    if fmt not in ("mp3", "mp4"):
-        raise HTTPException(status_code=400, detail='format must be "mp3" or "mp4"')
+    if fmt not in ("mp3", "mp4", "m4a"):
+        raise HTTPException(status_code=400, detail='format must be "mp3", "m4a", or "mp4"')
     mode = body.playlist_mode
     if mode == "items" and not (body.playlist_items and body.playlist_items.strip()):
         raise HTTPException(status_code=400, detail='playlist_items is required when playlist_mode is "items"')
@@ -1089,7 +1115,7 @@ async def download_full(
             }
         )
 
-    media = "audio/mpeg" if s.media_format == "mp3" else "video/mp4"
+    media = _media_type(s.media_format)
     background_tasks.add_task(_copy_to_saved_folder, s.full_path, fname)
     return FileResponse(
         path=s.full_path,
@@ -1141,7 +1167,7 @@ async def download_part(
             }
         )
 
-    media = "audio/mpeg" if s.media_format == "mp3" else "video/mp4"
+    media = _media_type(s.media_format)
     background_tasks.add_task(_copy_to_saved_folder, path, fname)
     return FileResponse(
         path=path,
@@ -1299,6 +1325,74 @@ async def download_clip(
         media_type="audio/mpeg",
         filename=fname,
     )
+
+
+@app.get("/api/updates/check")
+async def api_updates_check() -> JSONResponse:
+    """Return installed vs latest yt-dlp version from PyPI, and whether yt-dlp-ejs is installed."""
+    venv_py = _project_venv_python()
+    py = str(venv_py) if venv_py else sys.executable
+    versions: dict[str, str] = {}
+    try:
+        r = subprocess.run(
+            [py, "-m", "pip", "show", "yt-dlp", "yt-dlp-ejs"],
+            capture_output=True, text=True, timeout=15,
+        )
+        name: Optional[str] = None
+        for line in r.stdout.splitlines():
+            key, _, value = line.partition(":")
+            if key == "Name":
+                name = re.sub(r"[-_.]+", "-", value.strip()).lower()
+            elif key == "Version" and name:
+                versions[name] = value.strip()
+    except Exception:
+        pass
+    installed = versions.get("yt-dlp")
+    # Without yt-dlp-ejs, yt-dlp can't solve YouTube's JS challenges and formats go missing.
+    ejs_installed = "yt-dlp-ejs" in versions
+
+    latest: Optional[str] = None
+    try:
+        req = urllib.request.Request(
+            "https://pypi.org/pypi/yt-dlp/json",
+            headers={"User-Agent": "tube-grab/1.0"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+            latest = data["info"]["version"]
+    except Exception:
+        pass
+
+    up_to_date = bool(installed and latest and installed == latest and ejs_installed)
+    return JSONResponse(
+        {"installed": installed, "latest": latest, "up_to_date": up_to_date, "ejs_installed": ejs_installed}
+    )
+
+
+@app.post("/api/updates/run")
+async def api_updates_run() -> JSONResponse:
+    """Upgrade yt-dlp and its default extras (including yt-dlp-ejs) in the project venv via pip."""
+    venv_py = _project_venv_python()
+    py = str(venv_py) if venv_py else sys.executable
+
+    def _do_upgrade() -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [py, "-m", "pip", "install", "-U", YTDLP_PIP_REQUIREMENT],
+            capture_output=True, text=True, timeout=180,
+        )
+
+    try:
+        r = await asyncio.to_thread(_do_upgrade)
+        ok = r.returncode == 0
+        output = (r.stdout + r.stderr).strip()
+        if ok:
+            # Reset cmd cache so the app picks up the new binary
+            global _ytdlp_cmd_cache, _ytdlp_probe_failed
+            _ytdlp_cmd_cache = None
+            _ytdlp_probe_failed = False
+        return JSONResponse({"ok": ok, "output": output})
+    except Exception as e:
+        return JSONResponse({"ok": False, "output": str(e)}, status_code=500)
 
 
 # Optional: mount static for favicon etc.

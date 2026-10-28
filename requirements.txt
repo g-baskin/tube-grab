@@ -1,4 +1,5 @@
 fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
 python-multipart>=0.0.12
-yt-dlp>=2024.12.0
+# "default" extra adds yt-dlp-ejs, which YouTube needs (with a JS runtime such as Deno) since 2025.11.12
+yt-dlp[default]>=2025.11.12

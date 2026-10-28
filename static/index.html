@@ -96,9 +96,19 @@
           MP3 (audio)
         </label>
         <label class="inline-flex cursor-pointer items-center gap-2 text-zinc-300">
+          <input type="radio" name="fmt" value="m4a" class="accent-emerald-500" />
+          M4A (audio, faster)
+        </label>
+        <label class="inline-flex cursor-pointer items-center gap-2 text-zinc-300">
           <input type="radio" name="fmt" value="mp4" class="accent-emerald-500" />
           MP4 (video)
         </label>
+      </div>
+      <div id="fmtTradeoff" class="hidden rounded-lg border border-amber-500/20 bg-amber-950/30 px-4 py-2.5 text-[11px] leading-relaxed text-amber-300/80">
+        <strong class="font-semibold text-amber-300">M4A — faster, no conversion.</strong>
+        Downloads the audio stream directly from YouTube with no ffmpeg processing — significantly faster for large playlists.
+        Plays everywhere modern (iPhone, Mac, Android, VLC, etc.).
+        <strong class="font-semibold text-amber-300">Tradeoff:</strong> not compatible with very old devices or software that only accepts MP3, and clips (trim feature) are disabled for M4A.
       </div>
 
       <section class="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4" aria-labelledby="saveFolderHeading">
@@ -141,6 +151,43 @@
           </button>
         </div>
         <p id="downloadFolderStatus" class="mt-2 min-h-[1.25rem] text-xs text-zinc-500"></p>
+      </section>
+
+      <!-- Updates panel -->
+      <section id="updatesPanel" class="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+        <button
+          type="button"
+          id="btnUpdatesToggle"
+          class="flex w-full items-center justify-between text-left"
+          aria-expanded="false"
+        >
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-500">Updates</h3>
+          <span id="updatesChevron" class="text-zinc-600 transition-transform duration-200">▸</span>
+        </button>
+        <div id="updatesBody" class="hidden mt-3 space-y-3">
+          <div class="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
+            <span>yt-dlp installed: <code id="updatesInstalled" class="rounded bg-zinc-800 px-1 text-zinc-300">—</code></span>
+            <span>latest: <code id="updatesLatest" class="rounded bg-zinc-800 px-1 text-zinc-300">—</code></span>
+            <span id="updatesUpToDate" class="hidden rounded-full bg-emerald-950 px-2 py-0.5 text-emerald-400">✓ up to date</span>
+            <span id="updatesOutdated" class="hidden rounded-full bg-amber-950 px-2 py-0.5 text-amber-400">update available</span>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button
+              type="button"
+              id="btnCheckUpdates"
+              class="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-medium text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+            >Check for updates</button>
+            <button
+              type="button"
+              id="btnRunUpdate"
+              class="hidden rounded-lg bg-amber-600 px-3 py-2 text-xs font-medium text-white hover:bg-amber-500 disabled:opacity-50"
+            >Update yt-dlp</button>
+          </div>
+          <pre
+            id="updatesLog"
+            class="hidden max-h-40 overflow-y-auto rounded-lg bg-zinc-950 p-3 text-[11px] leading-relaxed text-zinc-400 whitespace-pre-wrap"
+          ></pre>
+        </div>
       </section>
 
       <section
@@ -607,7 +654,7 @@
 
       function loadFormat() {
         const v = localStorage.getItem(LS_FORMAT);
-        if (v === "mp3" || v === "mp4") {
+        if (v === "mp3" || v === "m4a" || v === "mp4") {
           const el = document.querySelector('input[name="fmt"][value="' + v + '"]');
           if (el) el.checked = true;
         }
@@ -940,7 +987,15 @@
         }
       }
 
-      document.querySelectorAll('input[name="fmt"]').forEach((el) => el.addEventListener("change", saveFormat));
+      function syncFmtTradeoff() {
+        const v = selectedFormat();
+        const box = $('fmtTradeoff');
+        if (v === 'm4a') box.classList.remove('hidden');
+        else box.classList.add('hidden');
+      }
+
+      document.querySelectorAll('input[name="fmt"]').forEach((el) => el.addEventListener("change", () => { saveFormat(); syncFmtTradeoff(); }));
+      syncFmtTradeoff();
 
       document.querySelectorAll('input[name="plScope"]').forEach((el) =>
         el.addEventListener("change", syncPlaylistListVisibility)
@@ -1107,10 +1162,10 @@
           } else {
             thumb.classList.add("hidden");
           }
-          $("fullFmtLabel").textContent = mediaFormat === "mp4" ? "MP4" : "MP3";
+          $("fullFmtLabel").textContent = mediaFormat === "mp4" ? "MP4" : mediaFormat === "m4a" ? "M4A" : "MP3";
           resultCard.classList.remove("hidden");
           renderResultDownloads(data);
-          if (data.clips_enabled) {
+          if (data.clips_enabled && mediaFormat !== 'm4a') {
             clipSection.classList.remove("hidden");
             updateClipHint();
           } else {
@@ -1255,8 +1310,86 @@
         }
       });
 
+      // ── Updates panel ────────────────────────────────────────────────
+      (function () {
+        const toggle = $('btnUpdatesToggle');
+        const body   = $('updatesBody');
+        const chevron = $('updatesChevron');
+
+        toggle.addEventListener('click', () => {
+          const open = body.classList.toggle('hidden');
+          toggle.setAttribute('aria-expanded', String(!open));
+          chevron.style.transform = open ? '' : 'rotate(90deg)';
+        });
+
+        async function checkUpdates() {
+          const btn = $('btnCheckUpdates');
+          btn.disabled = true;
+          btn.textContent = 'Checking…';
+          $('updatesUpToDate').classList.add('hidden');
+          $('updatesOutdated').classList.add('hidden');
+          $('btnRunUpdate').classList.add('hidden');
+          try {
+            const r = await fetch('/api/updates/check');
+            const d = await r.json();
+            $('updatesInstalled').textContent = d.installed || '—';
+            $('updatesLatest').textContent    = d.latest    || '—';
+            if (d.up_to_date) {
+              $('updatesUpToDate').classList.remove('hidden');
+            } else if (d.installed && d.latest) {
+              $('updatesOutdated').textContent =
+                d.installed === d.latest && d.ejs_installed === false
+                  ? 'yt-dlp-ejs missing (needed for YouTube)'
+                  : 'update available';
+              $('updatesOutdated').classList.remove('hidden');
+              $('btnRunUpdate').classList.remove('hidden');
+            }
+          } catch (e) {
+            showToast('Could not check for updates');
+          } finally {
+            btn.disabled = false;
+            btn.textContent = 'Check for updates';
+          }
+        }
+
+        async function runUpdate() {
+          const btn = $('btnRunUpdate');
+          const log = $('updatesLog');
+          btn.disabled = true;
+          btn.textContent = 'Updating…';
+          log.textContent = 'Running pip install -U "yt-dlp[default]"…';
+          log.classList.remove('hidden');
+          try {
+            const r = await fetch('/api/updates/run', { method: 'POST' });
+            const d = await r.json();
+            log.textContent = d.output || (d.ok ? 'Done.' : 'Update failed.');
+            if (d.ok) {
+              showToast('yt-dlp updated ✓', { variant: 'success', duration: 3500 });
+              $('updatesOutdated').classList.add('hidden');
+              $('updatesUpToDate').classList.remove('hidden');
+              btn.classList.add('hidden');
+              await checkUpdates(); // refresh versions
+              refreshHealth();
+            } else {
+              showToast('Update failed — see log below');
+            }
+          } catch (e) {
+            log.textContent = e.message || 'Update failed';
+            showToast('Update failed');
+          } finally {
+            btn.disabled = false;
+            btn.textContent = 'Update yt-dlp';
+          }
+        }
+
+        $('btnCheckUpdates').addEventListener('click', checkUpdates);
+        $('btnRunUpdate').addEventListener('click', runUpdate);
+      })();
+      // ── end Updates panel ────────────────────────────────────────────
+
       async function boot() {
         loadFormat();
+        syncFmtTradeoff();
         refreshHealth();
         loadDownloadFolderSettings();
         setInterval(refreshHealth, 60000);
